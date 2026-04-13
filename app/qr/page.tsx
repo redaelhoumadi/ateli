@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect } from 'react'
 import { QRCodeDisplay } from '@/components/pos/QRCodeDisplay'
 import { REWARDS_TIERS } from '@/lib/customerPortal'

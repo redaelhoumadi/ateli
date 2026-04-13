@@ -1,9 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Lazy initialization — evite le crash au build quand les env vars ne sont pas disponibles
+function getSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) {
+    throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required.')
+  }
+  return createClient(url, key)
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = (() => {
+  if (typeof window === 'undefined') {
+    // Server-side: return a proxy that throws on use if env vars missing
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+    if (!url || !key) {
+      // Return a dummy client that won't crash at import time
+      return createClient('https://placeholder.supabase.co', 'placeholder') as ReturnType<typeof createClient>
+    }
+    return createClient(url, key)
+  }
+  return getSupabaseClient()
+})()
 
 // ─── Products ────────────────────────────────────────────────
 export async function getProducts(brandId?: string) {

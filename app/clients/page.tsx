@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect, useMemo } from 'react'
 import { getCustomersWithSpend } from '@/lib/customerPortal'
 import { REWARDS_TIERS, getTierForSpend, getNextTier } from '@/lib/customerPortal'
