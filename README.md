@@ -17,10 +17,6 @@ Interface POS complète avec système de fidélité, construite avec Next.js 14,
 git clone https://github.com/redaelhoumadi/ateli.git
 cd ateli
 
-# 2. Copier les variables d'environnement
-cp .env.local.example .env.local
-# → Renseignez vos clés Supabase dans .env.local
-
 # 3. Installer les dépendances
 npm install
 
@@ -30,47 +26,6 @@ npm run dev
 
 Ouvrez [http://localhost:3000](http://localhost:3000) — vous serez redirigé vers `/pos`.
 
-## Structure du projet
-
-```
-ateli-pos/
-├── app/
-│   ├── pos/page.tsx          # Interface caisse principale
-│   ├── clients/page.tsx      # Gestion des clients
-│   ├── dashboard/page.tsx    # Statistiques de ventes
-│   └── layout.tsx
-├── components/
-│   └── pos/
-│       ├── ProductCatalog.tsx  # Grille produits avec filtres marques
-│       ├── Cart.tsx            # Panier avec gestion des points
-│       ├── CustomerSelector.tsx # Recherche + création client
-│       ├── CheckoutModal.tsx   # Modal de paiement
-│       └── ReceiptModal.tsx    # Ticket de caisse
-├── hooks/
-│   └── useCart.ts             # Store Zustand (panier global)
-├── lib/
-│   └── supabase.ts            # Client Supabase + toutes les requêtes
-└── types/
-    └── index.ts               # Types TypeScript (Brand, Product, Customer, Sale...)
-```
-
-## Système de fidélité
-
-| Règle | Valeur |
-|-------|--------|
-| Points gagnés | 10 pts / € dépensé |
-| Valeur d'un point | 0,01 € |
-| Utilisation | Slider en caisse |
-| Plafond | Limité au solde disponible |
-
-## Variables d'environnement
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-```
-
-Ces valeurs se trouvent dans **Supabase → Settings → API**.
 
 ## Technologies
 
