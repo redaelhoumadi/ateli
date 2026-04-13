@@ -10,6 +10,7 @@ export async function getProducts(brandId?: string) {
   let query = supabase
     .from('products')
     .select('*, brand:brands(id, name)')
+    .neq('is_active', false)
     .order('name')
 
   if (brandId) {
@@ -21,13 +22,19 @@ export async function getProducts(brandId?: string) {
   return data
 }
 
-export async function searchProducts(term: string) {
-  const { data, error } = await supabase
+export async function searchProducts(term: string, brandId?: string) {
+  let query = supabase
     .from('products')
     .select('*, brand:brands(id, name)')
+    .neq('is_active', false)
     .or(`name.ilike.%${term}%,reference.ilike.%${term}%`)
     .order('name')
 
+  if (brandId) {
+    query = query.eq('brand_id', brandId)
+  }
+
+  const { data, error } = await query
   if (error) throw error
   return data
 }

@@ -48,6 +48,14 @@ const IconChevron = () => (
   </svg>
 )
 
+const IconCart = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
+    <path d="M3 6h18"/>
+    <path d="M16 10a4 4 0 0 1-8 0"/>
+  </svg>
+)
+
 const IconUser = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="8" r="4"/>
@@ -60,8 +68,17 @@ export default function POSPage() {
   const [showCheckout, setShowCheckout] = useState(false)
   const [completedSale, setCompletedSale] = useState<Sale | null>(null)
   const [showQR, setShowQR] = useState(false)
-  const { setSellerId, sellerId, items } = useCartStore()
+  const { setSellerId, sellerId, items, totalItems } = useCartStore()
   const cartHasItems = items.length > 0
+  const [cartOpen, setCartOpen] = useState(false)
+  const itemCount = totalItems()
+
+  // Auto-open when first item added, keep open state user-controlled after that
+  const prevCount = useState(0)
+  useEffect(() => {
+    if (items.length > 0 && !cartOpen) setCartOpen(true)
+    if (items.length === 0) setCartOpen(false)
+  }, [items.length])
 
   useEffect(() => {
     getSellers().then((data) => {
@@ -161,6 +178,32 @@ export default function POSPage() {
             <IconChart />
             <span>Dashboard</span>
           </a>
+
+          {/* Divider */}
+          <div className="w-px h-6 bg-gray-200 mx-1" />
+
+          {/* Cart toggle */}
+          <button
+            onClick={() => setCartOpen((v) => !v)}
+            disabled={!cartHasItems}
+            className={`relative flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-xl border transition-all active:scale-95 ${
+              cartOpen && cartHasItems
+                ? 'bg-gray-900 text-white border-gray-900'
+                : cartHasItems
+                ? 'bg-white text-gray-800 border-gray-300 hover:border-gray-900 hover:bg-gray-50'
+                : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+            }`}
+          >
+            <IconCart />
+            <span>Panier</span>
+            {itemCount > 0 && (
+              <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-xs font-black flex items-center justify-center ${
+                cartOpen ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'
+              }`}>
+                {itemCount}
+              </span>
+            )}
+          </button>
         </div>
       </header>
 
@@ -172,10 +215,10 @@ export default function POSPage() {
           <ProductCatalog />
         </div>
 
-        {/* Cart panel — slides in when items > 0 */}
+        {/* Cart panel — slides in/out */}
         <div
           className={`flex flex-col bg-white border-l border-gray-200 transition-all duration-300 ease-in-out overflow-hidden ${
-            cartHasItems ? 'w-96 opacity-100' : 'w-0 opacity-0 border-l-0'
+            cartOpen && cartHasItems ? 'w-96 opacity-100' : 'w-0 opacity-0 border-l-0'
           }`}
         >
           <div className="w-96 h-full flex flex-col">

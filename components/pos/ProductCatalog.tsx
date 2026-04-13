@@ -22,7 +22,8 @@ export function ProductCatalog() {
     const timer = setTimeout(async () => {
       try {
         if (search.trim()) {
-          const data = await searchProducts(search)
+          // Recherche avec filtre marque si une marque est sélectionnée
+          const data = await searchProducts(search, selectedBrand || undefined)
           setProducts(data || [])
         } else {
           const data = await getProducts(selectedBrand || undefined)
@@ -40,19 +41,7 @@ export function ProductCatalog() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden p-4 gap-3">
-      {/* Search */}
-      <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
-          🔍
-        </span>
-        <input
-          type="text"
-          placeholder="Rechercher un produit ou référence..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-black"
-        />
-      </div>
+      
 
       {/* Brand filters */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -79,6 +68,20 @@ export function ProductCatalog() {
             {b.name}
           </button>
         ))}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+          🔍
+        </span>
+        <input
+          type="text"
+          placeholder="Rechercher un produit ou référence..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-black"
+        />
       </div>
 
       {/* Product grid */}
