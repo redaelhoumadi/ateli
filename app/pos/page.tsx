@@ -94,119 +94,59 @@ export default function POSPage() {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
 
-      {/* ── Header ──────────────────────────────────────────── */}
-      <header className="bg-white border-b border-gray-100 px-5 py-2.5 flex items-center justify-between shadow-sm">
-
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-black rounded-xl flex items-center justify-center shadow-sm">
-            <span className="text-white text-sm font-black tracking-tight">A</span>
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-gray-900 leading-none">Ateli POS</h1>
-            <p className="text-xs text-gray-400 leading-none mt-0.5">Concept Store</p>
-          </div>
-        </div>
-
-        {/* Nav */}
+      {/* ── POS top bar: seller + QR + cart ────────────────── */}
+      <header className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-
-          {/* Seller select — styled as button */}
-          <div className="relative">
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors cursor-pointer">
-              <div className="w-5 h-5 bg-gray-700 rounded-full flex items-center justify-center shrink-0">
-                <IconUser />
-              </div>
-              <select
-                value={sellerId}
-                onChange={(e) => setSellerId(e.target.value)}
-                className="text-sm font-medium text-gray-800 bg-transparent focus:outline-none cursor-pointer pr-1 appearance-none"
-                style={{ WebkitAppearance: 'none' }}
-              >
-                {sellers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-              <span className="text-gray-400 pointer-events-none">
-                <IconChevron />
-              </span>
+          {/* Seller select */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+            <div className="w-5 h-5 bg-gray-700 rounded-full flex items-center justify-center shrink-0">
+              <IconUser />
             </div>
+            <select
+              value={sellerId}
+              onChange={(e) => setSellerId(e.target.value)}
+              className="text-sm font-medium text-gray-800 bg-transparent focus:outline-none cursor-pointer pr-1 appearance-none"
+              style={{ WebkitAppearance: 'none' }}
+            >
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <IconChevron />
           </div>
-
-          {/* Divider */}
-          <div className="w-px h-6 bg-gray-200 mx-1" />
 
           {/* QR Fidélité */}
           <button
             onClick={() => setShowQR(true)}
-            className="flex items-center gap-2 px-3.5 py-2 bg-black text-white text-sm font-semibold rounded-xl hover:bg-gray-800 active:scale-95 transition-all shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-2 bg-black text-white text-sm font-semibold rounded-xl hover:bg-gray-800 active:scale-95 transition-all"
           >
             <IconQR />
             <span>QR Fidélité</span>
           </button>
-
-          {/* Produits */}
-          <a
-            href="/produits"
-            className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-600 rounded-xl border border-gray-200 hover:border-gray-900 hover:text-gray-900 hover:bg-gray-50 active:scale-95 transition-all"
-          >
-            <IconBox />
-            <span>Produits</span>
-          </a>
-
-          {/* Clients */}
-          <a
-            href="/clients"
-            className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-600 rounded-xl border border-gray-200 hover:border-gray-900 hover:text-gray-900 hover:bg-gray-50 active:scale-95 transition-all"
-          >
-            <IconUsers />
-            <span>Clients</span>
-          </a>
-
-          {/* Planning */}
-          <a
-            href="/planning"
-            className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-600 rounded-xl border border-gray-200 hover:border-gray-900 hover:text-gray-900 hover:bg-gray-50 active:scale-95 transition-all"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
-            <span>Planning</span>
-          </a>
-
-          {/* Dashboard */}
-          <a
-            href="/dashboard"
-            className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-600 rounded-xl border border-gray-200 hover:border-gray-900 hover:text-gray-900 hover:bg-gray-50 active:scale-95 transition-all"
-          >
-            <IconChart />
-            <span>Dashboard</span>
-          </a>
-
-          {/* Divider */}
-          <div className="w-px h-6 bg-gray-200 mx-1" />
-
-          {/* Cart toggle */}
-          <button
-            onClick={() => setCartOpen((v) => !v)}
-            disabled={!cartHasItems}
-            className={`relative flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-xl border transition-all active:scale-95 ${
-              cartOpen && cartHasItems
-                ? 'bg-gray-900 text-white border-gray-900'
-                : cartHasItems
-                ? 'bg-white text-gray-800 border-gray-300 hover:border-gray-900 hover:bg-gray-50'
-                : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-            }`}
-          >
-            <IconCart />
-            <span>Panier</span>
-            {itemCount > 0 && (
-              <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-xs font-black flex items-center justify-center ${
-                cartOpen ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'
-              }`}>
-                {itemCount}
-              </span>
-            )}
-          </button>
         </div>
+
+        {/* Cart toggle */}
+        <button
+          onClick={() => setCartOpen((v) => !v)}
+          disabled={!cartHasItems}
+          className={`relative flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-xl border transition-all active:scale-95 ${
+            cartOpen && cartHasItems
+              ? 'bg-gray-900 text-white border-gray-900'
+              : cartHasItems
+              ? 'bg-white text-gray-800 border-gray-300 hover:border-gray-900 hover:bg-gray-50'
+              : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+          }`}
+        >
+          <IconCart />
+          <span>Panier</span>
+          {itemCount > 0 && (
+            <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-xs font-black flex items-center justify-center ${
+              cartOpen ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'
+            }`}>
+              {itemCount}
+            </span>
+          )}
+        </button>
       </header>
 
       {/* ── Main layout ──────────────────────────────────────── */}

@@ -322,17 +322,12 @@ export default function ProduitsPage() {
   const selectedMixed       = !selectedAllActive && !selectedAllArchived
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-8xl mx-auto px-6 py-8">
+    <div className="flex-1 overflow-y-auto bg-gray-50">
+      <div className="max-w-7xl mx-auto px-6 py-8">
 
         {/* ── Header ──────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <div className="flex items-center gap-2 mb-1 text-sm">
-              <a href="/pos" className="text-gray-400 hover:text-gray-600 transition-colors">← POS</a>
-              <span className="text-gray-300">/</span>
-              <span className="text-gray-600">Produits</span>
-            </div>
             <h1 className="text-2xl font-bold text-gray-900">Catalogue produits</h1>
             <p className="text-gray-500 text-sm mt-0.5">Gérez vos produits et vos marques</p>
           </div>

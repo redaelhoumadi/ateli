@@ -324,21 +324,20 @@ export default function PlanningPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="w-8 h-8 border-2 border-gray-200 border-t-black rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex-1 overflow-y-auto bg-gray-50">
       <div className="max-w-full px-6 py-8">
 
         {/* ── Header ──────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div>
-            <a href="/pos" className="text-gray-400 hover:text-gray-600 text-sm transition-colors">← POS</a>
-            <h1 className="text-2xl font-bold text-gray-900 mt-1">Planning boutique</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Planning boutique</h1>
             <p className="text-gray-500 text-sm">Horaires d'ouverture 10h – 20h · Lundi au Samedi</p>
           </div>
 

@@ -302,13 +302,12 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex-1 overflow-y-auto bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 py-8">
 
         {/* ── Header ──────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
-            <a href="/pos" className="text-gray-400 hover:text-gray-600 text-sm">← POS</a>
             <h1 className="text-2xl font-bold text-gray-900 mt-1">Dashboard</h1>
             <p className="text-gray-500 text-sm">Analyse des ventes · {filtered.length} transaction{filtered.length > 1 ? 's' : ''}</p>
           </div>

@@ -55,15 +55,14 @@ export default function ClientsPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex-1 overflow-y-auto bg-gray-50">
       <div className="max-w-6xl mx-auto px-6 py-8">
 
         {/* ── Header ──────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <a href="/pos" className="text-gray-400 hover:text-gray-600 text-sm">← POS</a>
-            <h1 className="text-2xl font-bold text-gray-900 mt-1">Clients</h1>
-            <p className="text-gray-500 text-sm">Programme de fidélité par paliers</p>
+            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+            <p className="text-gray-500 text-sm mt-0.5">Programme de fidélité par paliers</p>
           </div>
         </div>
 
