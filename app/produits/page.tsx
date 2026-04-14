@@ -47,6 +47,13 @@ export default function ProduitsPage() {
   const [saving, setSaving]             = useState(false)
   const [error, setError]               = useState('')
 
+  // ── Pagination ────────────────────────────────────────────
+  const [pageSize, setPageSize]   = useState<number>(50)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setCurrentPage(1) }, [search, filterBrand, showArchived, pageSize])
+
   // ── Load ──────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -74,6 +81,12 @@ export default function ProduitsPage() {
       : (p as any).is_active !== false
     return matchSearch && matchBrand && matchActive
   }), [products, search, filterBrand, showArchived])
+
+  // ── Pagination computed ───────────────────────────────────
+  const totalPages  = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const paginated   = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const pageStart   = filtered.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const pageEnd     = Math.min(currentPage * pageSize, filtered.length)
 
   // ── Selection helpers ─────────────────────────────────────
   const allFilteredSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id))
@@ -310,7 +323,7 @@ export default function ProduitsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-8xl mx-auto px-6 py-8">
 
         {/* ── Header ──────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-8">
@@ -523,7 +536,7 @@ export default function ProduitsPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((p) => {
+                paginated.map((p) => {
                   const isSelected  = selected.has(p.id)
                   const isArchived  = (p as any).is_active === false
                   return (
@@ -621,17 +634,119 @@ export default function ProduitsPage() {
             </tbody>
           </table>
 
-          {/* Footer */}
+          {/* Footer — pagination ────────────────────────────── */}
           {!loading && filtered.length > 0 && (
-            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
-              <p className="text-xs text-gray-400">
-                {filtered.length} produit{filtered.length > 1 ? 's' : ''}
-                {(search || filterBrand) && ` sur ${products.length} au total`}
-              </p>
-              {someSelected && (
-                <p className="text-xs text-gray-500 font-medium">
-                  {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex flex-wrap items-center justify-between gap-3">
+
+              {/* Left: count + per-page selector */}
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-gray-500">
+                  {pageStart}–{pageEnd} sur{' '}
+                  <span className="font-semibold text-gray-700">{filtered.length}</span>
+                  {(search || filterBrand) && (
+                    <span className="text-gray-400"> (filtrés sur {products.length})</span>
+                  )}
+                  {someSelected && (
+                    <span className="text-gray-500 ml-2">· {selected.size} sélectionné{selected.size > 1 ? 's' : ''}</span>
+                  )}
                 </p>
+
+                {/* Per-page selector */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400">Afficher</span>
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                    {[50, 100, 500, 1000].map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => setPageSize(size)}
+                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                          pageSize === size
+                            ? 'bg-gray-900 text-white'
+                            : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-400">/ page</span>
+                </div>
+              </div>
+
+              {/* Right: page navigation */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  {/* First */}
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs"
+                    title="Première page"
+                  >
+                    «
+                  </button>
+                  {/* Prev */}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs"
+                  >
+                    ‹
+                  </button>
+
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const pages: (number | '…')[] = []
+                      if (totalPages <= 7) {
+                        for (let i = 1; i <= totalPages; i++) pages.push(i)
+                      } else {
+                        pages.push(1)
+                        if (currentPage > 3) pages.push('…')
+                        for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+                          pages.push(i)
+                        }
+                        if (currentPage < totalPages - 2) pages.push('…')
+                        pages.push(totalPages)
+                      }
+                      return pages.map((page, i) =>
+                        page === '…' ? (
+                          <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center text-xs text-gray-400">…</span>
+                        ) : (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page as number)}
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-medium transition-all ${
+                              currentPage === page
+                                ? 'bg-gray-900 text-white border border-gray-900'
+                                : 'border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        )
+                      )
+                    })()}
+                  </div>
+
+                  {/* Next */}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs"
+                  >
+                    ›
+                  </button>
+                  {/* Last */}
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs"
+                    title="Dernière page"
+                  >
+                    »
+                  </button>
+                </div>
               )}
             </div>
           )}
