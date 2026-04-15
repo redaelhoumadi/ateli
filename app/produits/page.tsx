@@ -12,7 +12,10 @@ import {
   archiveProduct,
   restoreProduct,
   createBrand,
+  uploadProductImage,
+  deleteProductImage,
 } from '@/lib/supabase'
+import { ProductImageUpload } from '@/components/ui/ProductImageUpload'
 import type { Product, Brand } from '@/types'
 
 type ProductForm = {
@@ -21,9 +24,10 @@ type ProductForm = {
   price: string
   discount: string
   brand_id: string
+  image_url: string | null
 }
 
-const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '' }
+const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null }
 
 export default function ProduitsPage() {
   const [products, setProducts]       = useState<Product[]>([])
@@ -46,6 +50,7 @@ export default function ProduitsPage() {
   const [newBrandName, setNewBrandName] = useState('')
   const [saving, setSaving]             = useState(false)
   const [error, setError]               = useState('')
+  const [imageUploading, setImageUploading] = useState(false)
 
   // ── Pagination ────────────────────────────────────────────
   const [pageSize, setPageSize]   = useState<number>(50)
@@ -187,7 +192,7 @@ export default function ProduitsPage() {
 
   // ── Single CRUD ───────────────────────────────────────────
   const openAdd = () => {
-    setForm({ ...emptyForm, brand_id: brands[0]?.id || '' })
+    setForm({ ...emptyForm, brand_id: brands[0]?.id || '', image_url: null })
     setError('')
     setModal('add')
   }
@@ -199,6 +204,7 @@ export default function ProduitsPage() {
       price: String(p.price),
       discount: p.discount !== null ? String(p.discount) : '',
       brand_id: p.brand_id,
+      image_url: (p as any).image_url ?? null,
     })
     setError('')
     setModal('edit')
@@ -238,6 +244,7 @@ export default function ProduitsPage() {
         price: Number(form.price),
         discount: discountVal,
         brand_id: form.brand_id,
+        image_url: form.image_url,
       }
       if (modal === 'add') {
         const created = await createProduct(payload)
@@ -290,6 +297,35 @@ export default function ProduitsPage() {
     } catch (err: any) {
       alert(err.message || 'Erreur lors de la restauration')
     }
+  }
+
+  // ── Image upload/remove ──────────────────────────────────
+  const handleImageUpload = async (file: File) => {
+    setImageUploading(true)
+    try {
+      // Use a temp ID for new products, real ID for edits
+      const tempId = editTarget?.id ?? `temp-${Date.now()}`
+      const url = await uploadProductImage(tempId, file)
+      setForm((f) => ({ ...f, image_url: url }))
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de l'upload")
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
+  const handleImageRemove = async () => {
+    if (form.image_url) {
+      setImageUploading(true)
+      try {
+        await deleteProductImage(form.image_url)
+      } catch {
+        // ignore delete error, just clear local state
+      } finally {
+        setImageUploading(false)
+      }
+    }
+    setForm((f) => ({ ...f, image_url: null }))
   }
 
   const handleCreateBrand = async () => {
@@ -553,13 +589,26 @@ export default function ProduitsPage() {
                         </div>
                       </td>
 
-                      {/* Name */}
+                      {/* Name + photo thumbnail */}
                       <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <p className={`text-sm font-medium ${isArchived ? 'text-gray-400' : 'text-gray-900'}`}>{p.name}</p>
-                          {isArchived && (
-                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Archivé</span>
-                          )}
+                        <div className="flex items-center gap-3">
+                          {/* Photo thumbnail */}
+                          <div className="w-10 h-10 rounded-lg border border-gray-100 bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">
+                            {(p as any).image_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={(p as any).image_url} alt={p.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                              </svg>
+                            )}
+                          </div>
+                          <div>
+                            <p className={`text-sm font-medium ${isArchived ? 'text-gray-400' : 'text-gray-900'}`}>{p.name}</p>
+                            {isArchived && (
+                              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Archivé</span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -809,6 +858,15 @@ export default function ProduitsPage() {
                   </div>
                 </div>
               )}
+
+              {/* ── Photo produit ── */}
+              <ProductImageUpload
+                currentUrl={form.image_url}
+                onUpload={handleImageUpload}
+                onRemove={handleImageRemove}
+                uploading={imageUploading}
+              />
+
               {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2.5 rounded-xl">{error}</p>}
             </div>
             <div className="px-6 pb-5 flex gap-3">

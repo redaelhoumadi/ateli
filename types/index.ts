@@ -11,6 +11,8 @@ export type Product = {
   price: number
   discount: number | null
   brand_id: string
+  image_url: string | null
+  is_active: boolean
   created_at: string
   brand?: Brand
 }

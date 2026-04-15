@@ -104,6 +104,7 @@ export async function createProduct(data: {
   price: number
   discount: number | null
   brand_id: string
+  image_url?: string | null
 }) {
   const { data: product, error } = await supabase
     .from('products')
@@ -123,6 +124,7 @@ export async function updateProduct(
     price: number
     discount: number | null
     brand_id: string
+    image_url?: string | null
   }
 ) {
   const { data: product, error } = await supabase
@@ -172,6 +174,39 @@ export async function restoreProduct(id: string) {
     .from('products')
     .update({ is_active: true })
     .eq('id', id)
+  if (error) throw error
+}
+
+
+// ─── Product images (Supabase Storage) ───────────────────────
+const BUCKET = 'product-images'
+
+export function getProductImageUrl(path: string): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  return `${url}/storage/v1/object/public/${BUCKET}/${path}`
+}
+
+export async function uploadProductImage(
+  productId: string,
+  file: File
+): Promise<string> {
+  const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+  const path = `${productId}.${ext}`
+
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, { upsert: true, contentType: file.type })
+
+  if (error) throw error
+  return getProductImageUrl(path)
+}
+
+export async function deleteProductImage(imageUrl: string): Promise<void> {
+  // Extract path from full URL
+  const parts = imageUrl.split(`/${BUCKET}/`)
+  if (parts.length < 2) return
+  const path = parts[1]
+  const { error } = await supabase.storage.from(BUCKET).remove([path])
   if (error) throw error
 }
 
