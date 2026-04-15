@@ -1,62 +1,88 @@
 'use client'
 
+import { CheckCircle, Printer } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogFooter,
+  Button, Badge, Separator,
+} from '@/components/ui'
 import type { Sale } from '@/types'
 
-type Props = { sale: Sale; onClose: () => void }
-
-export function ReceiptModal({ sale, onClose }: Props) {
+export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
   const date = new Date(sale.created_at)
+  const PAY: Record<string, string> = { card: '💳 Carte', cash: '💵 Espèces', mixed: '🔀 Mixte' }
+
+  const print = () => {
+    const w = window.open('', '_blank', 'width=320,height=600')
+    if (!w) return
+    w.document.write(`<html><head><title>Ticket</title>
+      <style>body{font-family:monospace;font-size:12px;width:280px;margin:0 auto;padding:10px}
+      h2{text-align:center;margin:0 0 4px}.center{text-align:center}.line{border-top:1px dashed #000;margin:8px 0}
+      .row{display:flex;justify-content:space-between}.total{font-weight:bold;font-size:14px}</style></head><body>
+      <h2>ATELI POS</h2><p class="center">${date.toLocaleString('fr-FR')}</p>
+      <div class="line"></div>
+      ${(sale.items||[]).map((i:any)=>`<div class="row"><span>${i.product?.name||'—'} ×${i.quantity}</span><span>${i.total_price.toFixed(2)} €</span></div>`).join('')}
+      <div class="line"></div>
+      <div class="row total"><span>TOTAL</span><span>${sale.total.toFixed(2)} €</span></div>
+      <div class="line"></div><p class="center">Merci de votre visite !</p></body></html>`)
+    w.document.close(); w.print()
+  }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-        {/* Success header */}
-        <div className="bg-green-500 px-6 py-5 text-center">
-          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3">
-            <span className="text-green-500 text-2xl">✓</span>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm overflow-hidden p-0">
+        {/* Success banner */}
+        <div className="bg-green-500 px-6 py-6 text-center rounded-t-2xl">
+          <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center mx-auto mb-3">
+            <CheckCircle size={28} className="text-green-500" />
           </div>
-          <p className="text-white font-bold text-lg">Vente validée !</p>
-          <p className="text-green-100 text-sm">{date.toLocaleString('fr-FR')}</p>
+          <p className="text-white font-black text-xl">Vente validée !</p>
+          <p className="text-green-100 text-sm mt-1">
+            {date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · {sale.total_items} article{sale.total_items > 1 ? 's' : ''}
+          </p>
         </div>
 
         <div className="p-6 space-y-4">
-          {/* Sale summary */}
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Total articles</span>
-              <span className="font-medium">{sale.total_items}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Paiement</span>
-              <span className="font-medium capitalize">{sale.payment_method}</span>
-            </div>
-            <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-100">
-              <span>Total encaissé</span>
-              <span>{sale.total.toFixed(2)} €</span>
-            </div>
+          {/* Amount */}
+          <div className="text-center">
+            <p className="text-4xl font-black text-gray-900">{sale.total.toFixed(2)} €</p>
+            <Badge variant="secondary" className="mt-2">{PAY[sale.payment_method] || sale.payment_method}</Badge>
           </div>
 
-          {/* Loyalty reminder if customer */}
           {sale.customer_id && (
             <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-center">
-              <p className="text-xs text-gray-500">
-                🎁 La remise fidélité a été appliquée automatiquement
-              </p>
+              <p className="text-xs text-gray-500">🎁 Remise fidélité appliquée sur cette vente</p>
             </div>
           )}
 
-          <div className="flex gap-3 pt-2">
-            <button onClick={() => window.print()}
-              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">
-              🖨 Ticket
-            </button>
-            <button onClick={onClose}
-              className="flex-[2] py-2.5 bg-black text-white rounded-xl text-sm font-bold hover:bg-gray-800">
-              Nouvelle vente
-            </button>
+          {/* Items */}
+          {sale.items && sale.items.length > 0 && (
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="max-h-36 overflow-y-auto divide-y divide-gray-50 px-4 py-2">
+                {(sale.items as any[]).map((item, i) => (
+                  <div key={i} className="flex justify-between py-1.5 text-xs text-gray-600">
+                    <span className="truncate mr-2">{item.product?.name || '—'} ×{item.quantity}</span>
+                    <span className="shrink-0 font-medium">{item.total_price.toFixed(2)} €</span>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between text-sm font-black">
+                <span>Total</span><span>{sale.total.toFixed(2)} €</span>
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={print} className="flex-1 gap-2">
+              <Printer size={14} /> Ticket
+            </Button>
+            <Button onClick={onClose} className="flex-[2] font-bold">
+              Nouvelle vente →
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

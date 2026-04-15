@@ -3,35 +3,71 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    box-sizing: border-box;
-  }
-  
-  body {
-    @apply antialiased;
-  }
+  * { box-sizing: border-box; }
+  body { @apply antialiased; }
 }
 
 @layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  /* Radix UI animation helpers */
+  .animate-in  { animation: fadeIn  150ms ease; }
+  .animate-out { animation: fadeOut 150ms ease; }
+
+  .fade-in-0    { --tw-enter-opacity: 0; }
+  .fade-out-0   { --tw-exit-opacity: 0; }
+  .zoom-in-95   { --tw-enter-scale: 0.95; }
+  .zoom-out-95  { --tw-exit-scale: 0.95; }
+
+  .data-\[state\=open\]\:animate-in[data-state=open]    { animation: fadeScaleIn 150ms ease forwards; }
+  .data-\[state\=closed\]\:animate-out[data-state=closed] { animation: fadeScaleOut 150ms ease forwards; }
+  .data-\[state\=open\]\:fade-in-0[data-state=open]    { animation: fadeIn 150ms ease forwards; }
+  .data-\[state\=closed\]\:fade-out-0[data-state=closed] { animation: fadeOut 150ms ease forwards; }
+  .data-\[state\=open\]\:zoom-in-95[data-state=open]   { animation: zoomIn 150ms ease forwards; }
+  .data-\[state\=closed\]\:zoom-out-95[data-state=closed]{ animation: zoomOut 150ms ease forwards; }
+  .data-\[side\=bottom\]\:slide-in-from-top-2[data-side=bottom]   { animation: slideFromTop 150ms ease forwards; }
+  .data-\[side\=top\]\:slide-in-from-bottom-2[data-side=top]      { animation: slideFromBottom 150ms ease forwards; }
+  .data-\[side\=bottom\]\:slide-in-from-top-1[data-side=bottom]   { animation: slideFromTopSm 100ms ease forwards; }
+  .data-\[side\=top\]\:slide-in-from-bottom-1[data-side=top]      { animation: slideFromBottomSm 100ms ease forwards; }
+  .data-\[state\=open\]\:slide-in-from-left-1\/2[data-state=open]  { animation: dialogIn 200ms cubic-bezier(0.16,1,0.3,1) forwards; }
+  .data-\[state\=closed\]\:slide-out-to-left-1\/2[data-state=closed]{ animation: dialogOut 150ms ease forwards; }
+  .data-\[state\=open\]\:slide-in-from-top-\[48\%\][data-state=open]  { animation: dialogIn 200ms cubic-bezier(0.16,1,0.3,1) forwards; }
+  .data-\[state\=closed\]\:slide-out-to-top-\[48\%\][data-state=closed]{ animation: dialogOut 150ms ease forwards; }
+  .data-\[state\=checked\]\:bg-gray-900[data-state=checked] { background-color: #111827; }
+  .data-\[state\=checked\]\:border-gray-900[data-state=checked] { border-color: #111827; }
+  .data-\[state\=checked\]\:translate-x-4[data-state=checked] { transform: translateX(1rem); }
+  .data-\[state\=unchecked\]\:translate-x-0[data-state=unchecked] { transform: translateX(0); }
+  .data-\[state\=unchecked\]\:bg-gray-200[data-state=unchecked] { background-color: #e5e7eb; }
+  .data-\[placeholder\]\:text-gray-400[data-placeholder] { color: #9ca3af; }
+  .data-\[disabled\]\:opacity-50[data-disabled] { opacity: 0.5; }
+  .data-\[disabled\]\:pointer-events-none[data-disabled] { pointer-events: none; }
+  .data-\[state\=active\]\:bg-white[data-state=active] { background: white; }
+  .data-\[state\=active\]\:text-gray-900[data-state=active] { color: #111827; }
+  .data-\[state\=active\]\:shadow-sm[data-state=active] { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+}
+
+@keyframes fadeIn        { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut       { from { opacity: 1; } to { opacity: 0; } }
+@keyframes zoomIn        { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+@keyframes zoomOut       { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.95); } }
+@keyframes fadeScaleIn   { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+@keyframes fadeScaleOut  { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.95); } }
+@keyframes slideFromTop  { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideFromBottom { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideFromTopSm  { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideFromBottomSm { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes dialogIn  {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes dialogOut {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, -48%) scale(0.96); }
 }
 
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .receipt-print, .receipt-print * {
-    visibility: visible;
-  }
-  .receipt-print {
-    position: absolute;
-    left: 0;
-    top: 0;
-  }
+  body * { visibility: hidden; }
+  .receipt-print, .receipt-print * { visibility: visible; }
+  .receipt-print { position: absolute; left: 0; top: 0; }
 }

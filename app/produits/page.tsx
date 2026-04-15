@@ -3,329 +3,183 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Search, Plus, Tag, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon } from 'lucide-react'
 import {
-  getProducts,
-  getBrands,
-  createProduct,
-  updateProduct,
-  deleteProduct,
-  archiveProduct,
-  restoreProduct,
-  createBrand,
-  uploadProductImage,
-  deleteProductImage,
+  getProducts, getBrands, createProduct, updateProduct,
+  deleteProduct, archiveProduct, restoreProduct, createBrand,
+  uploadProductImage, deleteProductImage,
 } from '@/lib/supabase'
 import { ProductImageUpload } from '@/components/ui/ProductImageUpload'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
+  Button, Badge, Card, Input, Label, Textarea, Separator,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Tooltip, TooltipTrigger, TooltipContent, TooltipProvider,
+  Checkbox, Spinner, StatCard, EmptyState, cn,
+} from '@/components/ui'
 import type { Product, Brand } from '@/types'
 
 type ProductForm = {
-  name: string
-  reference: string
-  price: string
-  discount: string
-  brand_id: string
-  image_url: string | null
+  name: string; reference: string; price: string
+  discount: string; brand_id: string; image_url: string | null
 }
-
 const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null }
 
 export default function ProduitsPage() {
-  const [products, setProducts]       = useState<Product[]>([])
-  const [brands, setBrands]           = useState<Brand[]>([])
-  const [loading, setLoading]         = useState(true)
+  const [products, setProducts]     = useState<Product[]>([])
+  const [brands, setBrands]         = useState<Brand[]>([])
+  const [loading, setLoading]       = useState(true)
   const [bulkLoading, setBulkLoading] = useState(false)
-  const [search, setSearch]           = useState('')
-  const [filterBrand, setFilterBrand] = useState<string>('')
+  const [search, setSearch]         = useState('')
+  const [filterBrand, setFilterBrand] = useState('all')
   const [showArchived, setShowArchived] = useState(false)
-
-  // Selection
-  const [selected, setSelected]   = useState<Set<string>>(new Set())
-
-  // Modals
-  const [modal, setModal]               = useState<'add' | 'edit' | 'delete' | 'brand' | null>(null)
-  const [editTarget, setEditTarget]     = useState<Product | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
-  const [deleteMode, setDeleteMode]     = useState<'confirm' | 'linked' | null>(null)
-  const [form, setForm]                 = useState<ProductForm>(emptyForm)
+  const [selected, setSelected]     = useState<Set<string>>(new Set())
+  const [modal, setModal]           = useState<'add'|'edit'|'delete'|'brand'|null>(null)
+  const [editTarget, setEditTarget] = useState<Product|null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Product|null>(null)
+  const [deleteMode, setDeleteMode] = useState<'confirm'|'linked'|null>(null)
+  const [form, setForm]             = useState<ProductForm>(emptyForm)
   const [newBrandName, setNewBrandName] = useState('')
-  const [saving, setSaving]             = useState(false)
-  const [error, setError]               = useState('')
+  const [saving, setSaving]         = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
+  const [error, setError]           = useState('')
+  const [pageSize, setPageSize]     = useState(50)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [sortCol, setSortCol]       = useState<'name'|'price'|'brand'>('name')
+  const [sortDir, setSortDir]       = useState<'asc'|'desc'>('asc')
 
-  // ── Pagination ────────────────────────────────────────────
-  const [pageSize, setPageSize]   = useState<number>(50)
-  const [currentPage, setCurrentPage] = useState<number>(1)
-
-  // Reset to page 1 when filters change
   useEffect(() => { setCurrentPage(1) }, [search, filterBrand, showArchived, pageSize])
 
-  // ── Load ──────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
       const [p, b] = await Promise.all([getProducts(), getBrands()])
       setProducts((p as Product[]) || [])
       setBrands((b as Brand[]) || [])
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }, [])
-
   useEffect(() => { loadAll() }, [loadAll])
 
-  // ── Filtering ──────────────────────────────────────────────
-  const filtered = useMemo(() => products.filter((p) => {
-    const matchSearch =
-      !search ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.reference.toLowerCase().includes(search.toLowerCase()) ||
-      p.brand?.name?.toLowerCase().includes(search.toLowerCase())
-    const matchBrand  = !filterBrand || p.brand_id === filterBrand
-    const matchActive = showArchived
-      ? (p as any).is_active === false
-      : (p as any).is_active !== false
-    return matchSearch && matchBrand && matchActive
-  }), [products, search, filterBrand, showArchived])
-
-  // ── Pagination computed ───────────────────────────────────
-  const totalPages  = Math.max(1, Math.ceil(filtered.length / pageSize))
-  const paginated   = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-  const pageStart   = filtered.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
-  const pageEnd     = Math.min(currentPage * pageSize, filtered.length)
-
-  // ── Selection helpers ─────────────────────────────────────
-  const allFilteredSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id))
-  const someSelected        = selected.size > 0
-
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
+  const filtered = useMemo(() => {
+    let list = products.filter(p => {
+      const ms = !search || p.name.toLowerCase().includes(search.toLowerCase())
+        || p.reference.toLowerCase().includes(search.toLowerCase())
+        || p.brand?.name?.toLowerCase().includes(search.toLowerCase())
+      const mb = filterBrand === 'all' || p.brand_id === filterBrand
+      const ma = showArchived ? (p as any).is_active === false : (p as any).is_active !== false
+      return ms && mb && ma
     })
-  }
+    list = [...list].sort((a, b) => {
+      let d = 0
+      if (sortCol === 'name')  d = a.name.localeCompare(b.name)
+      if (sortCol === 'price') d = a.price - b.price
+      if (sortCol === 'brand') d = (a.brand?.name||'').localeCompare(b.brand?.name||'')
+      return sortDir === 'asc' ? d : -d
+    })
+    return list
+  }, [products, search, filterBrand, showArchived, sortCol, sortDir])
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const paginated  = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const pageStart  = filtered.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const pageEnd    = Math.min(currentPage * pageSize, filtered.length)
+
+  const activeCount   = products.filter(p => (p as any).is_active !== false).length
+  const archivedCount = products.filter(p => (p as any).is_active === false).length
+  const avgPrice      = activeCount ? products.filter(p => (p as any).is_active !== false).reduce((s,p) => s + p.price, 0) / activeCount : 0
+  const withDiscount  = products.filter(p => p.discount && p.discount > 0 && (p as any).is_active !== false).length
+  const finalPrice    = (p: Product) => p.discount ? p.price * (1 - p.discount / 100) : p.price
+
+  // Selection
+  const allSel = filtered.length > 0 && filtered.every(p => selected.has(p.id))
+  const someSel = selected.size > 0
+  const toggleOne = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const toggleAll = () => {
-    if (allFilteredSelected) {
-      setSelected((prev) => {
-        const next = new Set(prev)
-        filtered.forEach((p) => next.delete(p.id))
-        return next
-      })
-    } else {
-      setSelected((prev) => {
-        const next = new Set(prev)
-        filtered.forEach((p) => next.add(p.id))
-        return next
-      })
-    }
+    if (allSel) setSelected(prev => { const n = new Set(prev); filtered.forEach(p => n.delete(p.id)); return n })
+    else setSelected(prev => { const n = new Set(prev); filtered.forEach(p => n.add(p.id)); return n })
   }
+  const clearSel = () => setSelected(new Set())
 
-  const clearSelection = () => setSelected(new Set())
-
-  // ── Bulk operations ───────────────────────────────────────
+  // Bulk ops
   const bulkArchive = async () => {
-    const ids = [...selected]
     setBulkLoading(true)
-    try {
-      await Promise.all(ids.map((id) => archiveProduct(id)))
-      setProducts((prev) =>
-        prev.map((p) => selected.has(p.id) ? { ...p, is_active: false } : p)
-      )
-      clearSelection()
-    } catch (e: any) {
-      alert(e.message || 'Erreur lors de l\'archivage en masse')
-    } finally {
-      setBulkLoading(false)
-    }
+    try { await Promise.all([...selected].map(id => archiveProduct(id))); setProducts(prev => prev.map(p => selected.has(p.id) ? { ...p, is_active: false } : p)); clearSel() }
+    catch (e: any) { alert(e.message) } finally { setBulkLoading(false) }
   }
-
   const bulkRestore = async () => {
-    const ids = [...selected]
     setBulkLoading(true)
-    try {
-      await Promise.all(ids.map((id) => restoreProduct(id)))
-      setProducts((prev) =>
-        prev.map((p) => selected.has(p.id) ? { ...p, is_active: true } : p)
-      )
-      clearSelection()
-    } catch (e: any) {
-      alert(e.message || 'Erreur lors de la restauration en masse')
-    } finally {
-      setBulkLoading(false)
-    }
+    try { await Promise.all([...selected].map(id => restoreProduct(id))); setProducts(prev => prev.map(p => selected.has(p.id) ? { ...p, is_active: true } : p)); clearSel() }
+    catch (e: any) { alert(e.message) } finally { setBulkLoading(false) }
   }
-
   const archiveAll = async () => {
-    if (!confirm(`Archiver tous les produits actifs (${activeCount}) ?`)) return
+    if (!confirm(`Archiver tous les ${activeCount} produits actifs ?`)) return
     setBulkLoading(true)
-    try {
-      const ids = products
-        .filter((p) => (p as any).is_active !== false)
-        .map((p) => p.id)
-      await Promise.all(ids.map((id) => archiveProduct(id)))
-      setProducts((prev) => prev.map((p) => ({ ...p, is_active: false })))
-      clearSelection()
-    } catch (e: any) {
-      alert(e.message || 'Erreur')
-    } finally {
-      setBulkLoading(false)
-    }
+    try { const ids = products.filter(p => (p as any).is_active !== false).map(p => p.id); await Promise.all(ids.map(id => archiveProduct(id))); setProducts(prev => prev.map(p => ({ ...p, is_active: false }))); clearSel() }
+    catch (e: any) { alert(e.message) } finally { setBulkLoading(false) }
   }
-
   const restoreAll = async () => {
-    if (!confirm(`Restaurer tous les produits archivés (${archivedCount}) ?`)) return
+    if (!confirm(`Restaurer tous les ${archivedCount} produits archivés ?`)) return
     setBulkLoading(true)
-    try {
-      const ids = products
-        .filter((p) => (p as any).is_active === false)
-        .map((p) => p.id)
-      await Promise.all(ids.map((id) => restoreProduct(id)))
-      setProducts((prev) => prev.map((p) => ({ ...p, is_active: true })))
-      clearSelection()
-    } catch (e: any) {
-      alert(e.message || 'Erreur')
-    } finally {
-      setBulkLoading(false)
-    }
+    try { const ids = products.filter(p => (p as any).is_active === false).map(p => p.id); await Promise.all(ids.map(id => restoreProduct(id))); setProducts(prev => prev.map(p => ({ ...p, is_active: true }))); clearSel() }
+    catch (e: any) { alert(e.message) } finally { setBulkLoading(false) }
   }
 
-  // ── Single CRUD ───────────────────────────────────────────
-  const openAdd = () => {
-    setForm({ ...emptyForm, brand_id: brands[0]?.id || '', image_url: null })
-    setError('')
-    setModal('add')
-  }
-
-  const openEdit = (p: Product) => {
-    setEditTarget(p)
-    setForm({
-      name: p.name, reference: p.reference,
-      price: String(p.price),
-      discount: p.discount !== null ? String(p.discount) : '',
-      brand_id: p.brand_id,
-      image_url: (p as any).image_url ?? null,
-    })
-    setError('')
-    setModal('edit')
-  }
-
-  const openDelete = (p: Product) => {
-    setDeleteTarget(p)
-    setDeleteMode(null)
-    setError('')
-    setModal('delete')
-  }
-
-  const closeModal = () => {
-    setModal(null)
-    setEditTarget(null)
-    setDeleteTarget(null)
-    setError('')
-  }
+  // CRUD
+  const openAdd  = () => { setForm({ ...emptyForm, brand_id: brands[0]?.id || '' }); setError(''); setModal('add') }
+  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null }); setError(''); setModal('edit') }
+  const openDelete = (p: Product) => { setDeleteTarget(p); setDeleteMode(null); setError(''); setModal('delete') }
+  const closeModal = () => { setModal(null); setEditTarget(null); setDeleteTarget(null); setError('') }
 
   const handleSave = async () => {
-    if (!form.name.trim())    return setError('Le nom est obligatoire')
+    if (!form.name.trim()) return setError('Le nom est obligatoire')
     if (!form.reference.trim()) return setError('La référence est obligatoire')
     if (!form.price || isNaN(Number(form.price))) return setError('Prix invalide')
-    if (!form.brand_id)       return setError('Sélectionnez une marque')
-
-    const discountVal =
-      form.discount !== '' && !isNaN(Number(form.discount)) ? Number(form.discount) : null
-
-    if (discountVal !== null && (discountVal < 0 || discountVal > 100))
-      return setError('La remise doit être entre 0 et 100 %')
-
+    if (!form.brand_id) return setError('Sélectionnez une marque')
+    const disc = form.discount !== '' && !isNaN(Number(form.discount)) ? Number(form.discount) : null
+    if (disc != null && (disc < 0 || disc > 100)) return setError('Remise entre 0 et 100 %')
     setSaving(true); setError('')
     try {
-      const payload = {
-        name: form.name.trim(),
-        reference: form.reference.trim().toUpperCase(),
-        price: Number(form.price),
-        discount: discountVal,
-        brand_id: form.brand_id,
-        image_url: form.image_url,
-      }
+      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url }
       if (modal === 'add') {
         const created = await createProduct(payload)
-        setProducts((prev) => [...prev, created as Product].sort((a, b) => a.name.localeCompare(b.name)))
-      } else if (modal === 'edit' && editTarget) {
+        setProducts(prev => [...prev, created as Product].sort((a,b) => a.name.localeCompare(b.name)))
+      } else if (editTarget) {
         const updated = await updateProduct(editTarget.id, payload)
-        setProducts((prev) => prev.map((p) => p.id === editTarget.id ? (updated as Product) : p))
+        setProducts(prev => prev.map(p => p.id === editTarget.id ? updated as Product : p))
       }
       closeModal()
-    } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue')
-    } finally {
-      setSaving(false)
-    }
+    } catch (e: any) { setError(e.message || 'Erreur') }
+    finally { setSaving(false) }
   }
 
   const handleDelete = async () => {
     if (!deleteTarget) return
     setSaving(true); setError('')
-    try {
-      await deleteProduct(deleteTarget.id)
-      setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id))
-      closeModal()
-    } catch (err: any) {
-      if (err.message === 'LINKED') setDeleteMode('linked')
-      else setError(err.message || 'Impossible de supprimer ce produit')
-    } finally {
-      setSaving(false)
-    }
+    try { await deleteProduct(deleteTarget.id); setProducts(prev => prev.filter(p => p.id !== deleteTarget.id)); closeModal() }
+    catch (e: any) { e.message === 'LINKED' ? setDeleteMode('linked') : setError(e.message) }
+    finally { setSaving(false) }
   }
 
   const handleArchiveSingle = async () => {
     if (!deleteTarget) return
     setSaving(true); setError('')
-    try {
-      await archiveProduct(deleteTarget.id)
-      setProducts((prev) => prev.map((p) => p.id === deleteTarget.id ? { ...p, is_active: false } : p))
-      closeModal()
-    } catch (err: any) {
-      setError(err.message || "Erreur lors de l'archivage")
-    } finally {
-      setSaving(false)
-    }
+    try { await archiveProduct(deleteTarget.id); setProducts(prev => prev.map(p => p.id === deleteTarget.id ? { ...p, is_active: false } : p)); closeModal() }
+    catch (e: any) { setError(e.message) } finally { setSaving(false) }
   }
 
   const handleRestoreSingle = async (p: Product) => {
-    try {
-      await restoreProduct(p.id)
-      setProducts((prev) => prev.map((pr) => pr.id === p.id ? { ...pr, is_active: true } : pr))
-    } catch (err: any) {
-      alert(err.message || 'Erreur lors de la restauration')
-    }
+    try { await restoreProduct(p.id); setProducts(prev => prev.map(pr => pr.id === p.id ? { ...pr, is_active: true } : pr)) }
+    catch (e: any) { alert(e.message) }
   }
 
-  // ── Image upload/remove ──────────────────────────────────
   const handleImageUpload = async (file: File) => {
     setImageUploading(true)
-    try {
-      // Use a temp ID for new products, real ID for edits
-      const tempId = editTarget?.id ?? `temp-${Date.now()}`
-      const url = await uploadProductImage(tempId, file)
-      setForm((f) => ({ ...f, image_url: url }))
-    } catch (err: any) {
-      setError(err.message || "Erreur lors de l'upload")
-    } finally {
-      setImageUploading(false)
-    }
+    try { const url = await uploadProductImage(editTarget?.id ?? `temp-${Date.now()}`, file); setForm(f => ({ ...f, image_url: url })) }
+    catch (e: any) { setError(e.message) } finally { setImageUploading(false) }
   }
-
   const handleImageRemove = async () => {
-    if (form.image_url) {
-      setImageUploading(true)
-      try {
-        await deleteProductImage(form.image_url)
-      } catch {
-        // ignore delete error, just clear local state
-      } finally {
-        setImageUploading(false)
-      }
-    }
-    setForm((f) => ({ ...f, image_url: null }))
+    if (form.image_url) { try { await deleteProductImage(form.image_url) } catch {} }
+    setForm(f => ({ ...f, image_url: null }))
   }
 
   const handleCreateBrand = async () => {
@@ -333,633 +187,379 @@ export default function ProduitsPage() {
     setSaving(true)
     try {
       const b = await createBrand(newBrandName.trim())
-      setBrands((prev) => [...prev, b as Brand].sort((a, z) => a.name.localeCompare(z.name)))
-      setForm((f) => ({ ...f, brand_id: (b as Brand).id }))
+      setBrands(prev => [...prev, b as Brand].sort((a,z) => a.name.localeCompare(z.name)))
+      setForm(f => ({ ...f, brand_id: (b as Brand).id }))
       setNewBrandName('')
       setModal(modal === 'brand' ? null : modal)
-    } catch (err: any) {
-      setError(err.message || 'Erreur création marque')
-    } finally {
-      setSaving(false)
-    }
+    } catch (e: any) { setError(e.message) } finally { setSaving(false) }
   }
 
-  // ── Stats ─────────────────────────────────────────────────
-  const activeCount   = products.filter((p) => (p as any).is_active !== false).length
-  const archivedCount = products.filter((p) => (p as any).is_active === false).length
-  const avgPrice      = activeCount ? products.filter((p) => (p as any).is_active !== false).reduce((s, p) => s + p.price, 0) / activeCount : 0
-  const withDiscount  = products.filter((p) => p.discount && p.discount > 0 && (p as any).is_active !== false).length
-  const finalPrice    = (p: Product) => p.discount ? p.price * (1 - p.discount / 100) : p.price
-
-  // Selected products details (for bulk bar label)
-  const selectedProducts = filtered.filter((p) => selected.has(p.id))
-  const selectedAllActive   = selectedProducts.every((p) => (p as any).is_active !== false)
-  const selectedAllArchived = selectedProducts.every((p) => (p as any).is_active === false)
-  const selectedMixed       = !selectedAllActive && !selectedAllArchived
+  const SortBtn = ({ col, label }: { col: typeof sortCol; label: string }) => (
+    <button onClick={() => { sortCol === col ? setSortDir(d => d === 'asc' ? 'desc' : 'asc') : (setSortCol(col), setSortDir('asc')) }}
+      className={cn('flex items-center gap-1 text-xs font-semibold uppercase tracking-wide transition-colors', sortCol === col ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600')}>
+      {label}
+      {sortCol === col ? (sortDir === 'asc' ? <ChevronUp size={12}/> : <ChevronDown size={12}/>) : <ChevronDown size={12} className="opacity-30"/>}
+    </button>
+  )
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <TooltipProvider delayDuration={300}>
+      <div className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="max-w-8xl mx-auto px-6 py-8 space-y-6">
 
-        {/* ── Header ──────────────────────────────────────── */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Catalogue produits</h1>
-            <p className="text-gray-500 text-sm mt-0.5">Gérez vos produits et vos marques</p>
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Catalogue produits</h1>
+              <p className="text-gray-500 text-sm mt-0.5">Gérez vos produits et vos marques</p>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => { setNewBrandName(''); setError(''); setModal('brand') }}>
+                <Tag size={14}/> Nouvelle marque
+              </Button>
+              <Button onClick={openAdd}>
+                <Plus size={14}/> Ajouter un produit
+              </Button>
+            </div>
           </div>
+
+          {/* KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Produits actifs"  value={activeCount}              icon={<Package size={18}/>}/>
+            <StatCard label="Archivés"          value={archivedCount}            icon={<Archive size={18}/>}/>
+            <StatCard label="Prix moyen"        value={`${avgPrice.toFixed(2)} €`} icon={<span className="text-base">💶</span>}/>
+            <StatCard label="En promotion"      value={withDiscount}             icon={<Tag size={18}/>}/>
+          </div>
+
+          {/* Filters */}
           <div className="flex gap-3">
-            <button
-              onClick={() => { setNewBrandName(''); setError(''); setModal('brand') }}
-              className="px-4 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-medium rounded-xl hover:border-gray-400 transition-all"
-            >
-              🏷 Nouvelle marque
-            </button>
-            <button
-              onClick={openAdd}
-              className="px-5 py-2.5 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-all"
-            >
-              + Ajouter un produit
-            </button>
+            <Input icon={<Search size={14}/>} placeholder="Nom, référence ou marque…" value={search} onChange={e => setSearch(e.target.value)} className="flex-1"/>
+            <Select value={filterBrand} onValueChange={setFilterBrand}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Toutes les marques"/></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les marques</SelectItem>
+                {brands.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button variant={showArchived ? 'default' : 'outline'} onClick={() => { setShowArchived(!showArchived); clearSel() }}>
+              <Archive size={14}/> {showArchived ? 'Archivés' : 'Voir archivés'}
+            </Button>
           </div>
-        </div>
 
-        {/* ── KPIs ────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {[
-            { label: 'Produits actifs',  value: activeCount,                       icon: '📦' },
-            { label: 'Archivés',         value: archivedCount,                     icon: '🗂' },
-            { label: 'Prix moyen',       value: `${avgPrice.toFixed(2)} €`,        icon: '💶' },
-            { label: 'En promotion',     value: withDiscount,                      icon: '🏷️' },
-          ].map((k) => (
-            <div key={k.label} className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">{k.label}</p>
-                <span className="text-lg">{k.icon}</span>
+          {/* Global bulk */}
+          <div className="flex items-center gap-3">
+            {!showArchived && activeCount > 0 && (
+              <Button variant="outline" size="sm" onClick={archiveAll} disabled={bulkLoading}>
+                <Archive size={13}/> Tout archiver ({activeCount})
+              </Button>
+            )}
+            {showArchived && archivedCount > 0 && (
+              <Button variant="outline" size="sm" onClick={restoreAll} disabled={bulkLoading} className="text-green-700 border-green-200 hover:border-green-500">
+                <RotateCcw size={13}/> Tout désarchiver ({archivedCount})
+              </Button>
+            )}
+            {bulkLoading && <div className="flex items-center gap-2 text-xs text-gray-400"><Spinner size="sm"/> Traitement…</div>}
+          </div>
+
+          {/* Selection bar */}
+          <div className={cn('overflow-hidden transition-all duration-200', someSel ? 'max-h-16' : 'max-h-0')}>
+            <div className="flex items-center gap-3 px-5 py-3 bg-gray-900 rounded-2xl">
+              <div className="flex items-center gap-2 flex-1">
+                <span className="w-6 h-6 bg-white rounded-md flex items-center justify-center text-xs font-black text-gray-900">{selected.size}</span>
+                <span className="text-sm font-semibold text-white">produit{selected.size > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{k.value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Search + filters ────────────────────────────── */}
-        <div className="flex gap-3 mb-4">
-          <div className="relative flex-1">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-            <input
-              type="text"
-              placeholder="Rechercher par nom, référence ou marque..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-black"
-            />
-          </div>
-          <select
-            value={filterBrand}
-            onChange={(e) => setFilterBrand(e.target.value)}
-            className="border border-gray-200 rounded-xl px-4 py-2.5 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-black min-w-[160px]"
-          >
-            <option value="">Toutes les marques</option>
-            {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-          <button
-            onClick={() => { setShowArchived(!showArchived); clearSelection() }}
-            className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
-              showArchived ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
-            }`}
-          >
-            {showArchived ? '📦 Archivés' : '🗂 Voir archivés'}
-          </button>
-        </div>
-
-        {/* ── Global bulk actions (Tout archiver / Tout désarchiver) ── */}
-        <div className="flex items-center gap-3 mb-4">
-          {!showArchived && activeCount > 0 && (
-            <button
-              onClick={archiveAll}
-              disabled={bulkLoading}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-800 hover:text-gray-900 disabled:opacity-50 transition-all"
-            >
-              <span>📦</span>
-              Tout archiver ({activeCount})
-            </button>
-          )}
-          {showArchived && archivedCount > 0 && (
-            <button
-              onClick={restoreAll}
-              disabled={bulkLoading}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-xl hover:border-green-500 disabled:opacity-50 transition-all"
-            >
-              <span>↩</span>
-              Tout désarchiver ({archivedCount})
-            </button>
-          )}
-          {bulkLoading && (
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <div className="w-3.5 h-3.5 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-              Traitement en cours…
-            </div>
-          )}
-        </div>
-
-        {/* ── Selection bulk action bar ────────────────────── */}
-        <div className={`overflow-hidden transition-all duration-200 ${someSelected ? 'max-h-20 mb-4' : 'max-h-0 mb-0'}`}>
-          <div className="flex items-center gap-3 px-5 py-3 bg-gray-900 rounded-2xl">
-            {/* Count */}
-            <div className="flex items-center gap-2 flex-1">
-              <div className="w-6 h-6 bg-white rounded-md flex items-center justify-center">
-                <span className="text-xs font-black text-gray-900">{selected.size}</span>
+              <div className="flex items-center gap-2">
+                {!showArchived && (
+                  <Button size="xs" variant="secondary" onClick={bulkArchive} disabled={bulkLoading}>
+                    <Archive size={12}/> Archiver la sélection
+                  </Button>
+                )}
+                {showArchived && (
+                  <Button size="xs" onClick={bulkRestore} disabled={bulkLoading} className="bg-green-500 hover:bg-green-600">
+                    <RotateCcw size={12}/> Restaurer la sélection
+                  </Button>
+                )}
+                <button onClick={clearSel} className="text-xs text-gray-400 hover:text-white px-2 transition-colors">✕ Désélectionner</button>
               </div>
-              <span className="text-sm font-semibold text-white">
-                produit{selected.size > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}
-              </span>
-            </div>
-
-            {/* Bulk actions */}
-            <div className="flex items-center gap-2">
-              {/* Archive selected (only if viewing active) */}
-              {!showArchived && (selectedAllActive || selectedMixed) && (
-                <button
-                  onClick={bulkArchive}
-                  disabled={bulkLoading}
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-900 bg-white rounded-xl hover:bg-gray-100 disabled:opacity-50 transition-all"
-                >
-                  📦 Archiver la sélection
-                </button>
-              )}
-              {/* Restore selected (only if viewing archived) */}
-              {showArchived && (selectedAllArchived || selectedMixed) && (
-                <button
-                  onClick={bulkRestore}
-                  disabled={bulkLoading}
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-900 bg-green-400 rounded-xl hover:bg-green-300 disabled:opacity-50 transition-all"
-                >
-                  ↩ Restaurer la sélection
-                </button>
-              )}
-              {/* Deselect */}
-              <button
-                onClick={clearSelection}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-400 hover:text-white rounded-xl transition-colors"
-              >
-                ✕ Désélectionner
-              </button>
             </div>
           </div>
-        </div>
 
-        {/* ── Products table ───────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                {/* Checkbox header */}
-                <th className="w-12 px-4 py-3.5">
-                  <button
-                    onClick={toggleAll}
-                    className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                      allFilteredSelected
-                        ? 'bg-gray-900 border-gray-900'
-                        : filtered.some((p) => selected.has(p.id))
-                        ? 'bg-gray-300 border-gray-400'
-                        : 'border-gray-300 hover:border-gray-500'
-                    }`}
-                  >
-                    {allFilteredSelected && (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>
-                    )}
-                    {!allFilteredSelected && filtered.some((p) => selected.has(p.id)) && (
-                      <div className="w-2.5 h-0.5 bg-gray-600 rounded" />
-                    )}
-                  </button>
-                </th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3.5 uppercase tracking-wide">Produit</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3.5 uppercase tracking-wide">Référence</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3.5 uppercase tracking-wide">Marque</th>
-                <th className="text-right text-xs font-medium text-gray-500 px-4 py-3.5 uppercase tracking-wide">Prix</th>
-                <th className="text-right text-xs font-medium text-gray-500 px-4 py-3.5 uppercase tracking-wide">Remise</th>
-                <th className="text-right text-xs font-medium text-gray-500 px-4 py-3.5 uppercase tracking-wide">Prix final</th>
-                <th className="text-right text-xs font-medium text-gray-500 px-4 py-3.5 uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="py-16 text-center">
-                    <div className="w-8 h-8 border-2 border-gray-200 border-t-black rounded-full animate-spin mx-auto" />
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-16 text-center">
-                    <p className="text-4xl mb-3">{showArchived ? '🗂' : '📦'}</p>
-                    <p className="text-gray-400 text-sm">
-                      {showArchived
-                        ? 'Aucun produit archivé'
-                        : search || filterBrand
-                        ? 'Aucun produit correspond à votre recherche'
-                        : 'Aucun produit — commencez par en ajouter un'}
-                    </p>
-                    {!search && !filterBrand && !showArchived && (
-                      <button onClick={openAdd} className="mt-4 px-5 py-2 bg-black text-white text-sm rounded-xl hover:bg-gray-800 transition-colors">
-                        + Ajouter un produit
+          {/* Table */}
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="w-10 px-4 py-3.5">
+                      <button onClick={toggleAll}
+                        className={cn('w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all',
+                          allSel ? 'bg-gray-900 border-gray-900' : filtered.some(p => selected.has(p.id)) ? 'bg-gray-300 border-gray-400' : 'border-gray-300 hover:border-gray-500')}>
+                        {allSel && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>}
+                        {!allSel && filtered.some(p => selected.has(p.id)) && <div className="w-2.5 h-0.5 bg-gray-600 rounded"/>}
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ) : (
-                paginated.map((p) => {
-                  const isSelected  = selected.has(p.id)
-                  const isArchived  = (p as any).is_active === false
-                  return (
-                    <tr
-                      key={p.id}
-                      onClick={() => toggleOne(p.id)}
-                      className={`border-b border-gray-50 last:border-0 cursor-pointer transition-colors group ${
-                        isSelected ? 'bg-gray-900/5' : 'hover:bg-gray-50/60'
-                      }`}
-                    >
-                      {/* Checkbox */}
-                      <td className="w-12 px-4 py-4" onClick={(e) => { e.stopPropagation(); toggleOne(p.id) }}>
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                          isSelected ? 'bg-gray-900 border-gray-900' : 'border-gray-300 group-hover:border-gray-500'
-                        }`}>
-                          {isSelected && (
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Name + photo thumbnail */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
-                          {/* Photo thumbnail */}
-                          <div className="w-10 h-10 rounded-lg border border-gray-100 bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">
-                            {(p as any).image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={(p as any).image_url} alt={p.name} className="w-full h-full object-cover" />
+                    </th>
+                    <th className="text-left px-4 py-3.5"><SortBtn col="name" label="Produit"/></th>
+                    <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Référence</th>
+                    <th className="text-left px-4 py-3.5"><SortBtn col="brand" label="Marque"/></th>
+                    <th className="text-right px-4 py-3.5"><SortBtn col="price" label="Prix"/></th>
+                    <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Remise</th>
+                    <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Prix final</th>
+                    <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {loading ? (
+                    <tr><td colSpan={8} className="py-16 text-center"><Spinner size="md" className="mx-auto"/></td></tr>
+                  ) : paginated.length === 0 ? (
+                    <tr><td colSpan={8}>
+                      <EmptyState icon={showArchived ? '🗂' : '📦'}
+                        title={showArchived ? 'Aucun produit archivé' : search || filterBrand ? 'Aucun résultat' : 'Aucun produit'}
+                        description={!showArchived && !search && !filterBrand ? 'Commencez par ajouter un produit' : undefined}
+                        action={!search && !filterBrand && !showArchived ? <Button onClick={openAdd}><Plus size={14}/> Ajouter un produit</Button> : undefined}
+                      />
+                    </td></tr>
+                  ) : paginated.map(p => {
+                    const isSel = selected.has(p.id)
+                    const isArc = (p as any).is_active === false
+                    const img   = (p as any).image_url as string|null
+                    return (
+                      <tr key={p.id} onClick={() => toggleOne(p.id)}
+                        className={cn('cursor-pointer transition-colors group', isSel ? 'bg-gray-900/5' : 'hover:bg-gray-50/60')}>
+                        <td className="w-10 px-4 py-4" onClick={e => { e.stopPropagation(); toggleOne(p.id) }}>
+                          <div className={cn('w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all', isSel ? 'bg-gray-900 border-gray-900' : 'border-gray-300 group-hover:border-gray-500')}>
+                            {isSel && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl border border-gray-100 bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">
+                              {img ? <img src={img} alt={p.name} className="w-full h-full object-cover"/> : <ImageIcon size={16} className="text-gray-300"/>}
+                            </div>
+                            <div>
+                              <p className={cn('text-sm font-medium', isArc ? 'text-gray-400' : 'text-gray-900')}>{p.name}</p>
+                              {isArc && <Badge variant="secondary" size="sm">Archivé</Badge>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">{p.reference}</span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <Badge variant="info" size="sm">{p.brand?.name}</Badge>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <span className={cn('text-sm', p.discount ? 'text-gray-400 line-through' : 'font-medium text-gray-900')}>{p.price.toFixed(2)} €</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          {p.discount ? <Badge variant="destructive" size="sm">-{p.discount}%</Badge> : <span className="text-xs text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <span className="text-sm font-bold text-gray-900">{finalPrice(p).toFixed(2)} €</span>
+                        </td>
+                        <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {isArc ? (
+                              <Button size="xs" variant="outline" onClick={() => handleRestoreSingle(p)} className="text-green-700 border-green-200 hover:border-green-500">
+                                <RotateCcw size={11}/> Restaurer
+                              </Button>
                             ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                              </svg>
+                              <>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button size="icon-sm" variant="ghost" onClick={() => openEdit(p)}><Pencil size={13}/></Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Modifier</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button size="icon-sm" variant="ghost" onClick={() => openDelete(p)} className="text-red-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={13}/></Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Supprimer</TooltipContent>
+                                </Tooltip>
+                              </>
                             )}
                           </div>
-                          <div>
-                            <p className={`text-sm font-medium ${isArchived ? 'text-gray-400' : 'text-gray-900'}`}>{p.name}</p>
-                            {isArchived && (
-                              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Archivé</span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-                      {/* Reference */}
-                      <td className="px-4 py-4">
-                        <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">{p.reference}</span>
-                      </td>
-
-                      {/* Brand */}
-                      <td className="px-4 py-4">
-                        <span className="text-xs bg-blue-50 text-blue-700 font-medium px-2.5 py-1 rounded-full border border-blue-100">{p.brand?.name}</span>
-                      </td>
-
-                      {/* Price */}
-                      <td className="px-4 py-4 text-right">
-                        <span className={`text-sm ${p.discount ? 'text-gray-400 line-through' : 'font-medium text-gray-900'}`}>
-                          {p.price.toFixed(2)} €
-                        </span>
-                      </td>
-
-                      {/* Discount */}
-                      <td className="px-4 py-4 text-right">
-                        {p.discount ? (
-                          <span className="text-xs bg-red-50 text-red-600 font-semibold px-2.5 py-1 rounded-full border border-red-100">-{p.discount} %</span>
-                        ) : (
-                          <span className="text-xs text-gray-300">—</span>
-                        )}
-                      </td>
-
-                      {/* Final price */}
-                      <td className="px-4 py-4 text-right">
-                        <span className="text-sm font-bold text-gray-900">{finalPrice(p).toFixed(2)} €</span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {isArchived ? (
-                            <button
-                              onClick={() => handleRestoreSingle(p)}
-                              className="text-xs px-3 py-1.5 border border-green-200 text-green-600 rounded-lg hover:bg-green-50 transition-all whitespace-nowrap"
-                            >
-                              ↩ Restaurer
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => openEdit(p)}
-                                className="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg hover:border-black hover:text-black transition-all"
-                              >
-                                ✏️ Modifier
-                              </button>
-                              <button
-                                onClick={() => openDelete(p)}
-                                className="text-xs px-3 py-1.5 border border-red-100 text-red-500 rounded-lg hover:bg-red-50 transition-all"
-                              >
-                                🗑 Supprimer
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-
-          {/* Footer — pagination ────────────────────────────── */}
-          {!loading && filtered.length > 0 && (
-            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex flex-wrap items-center justify-between gap-3">
-
-              {/* Left: count + per-page selector */}
-              <div className="flex items-center gap-3">
-                <p className="text-xs text-gray-500">
-                  {pageStart}–{pageEnd} sur{' '}
-                  <span className="font-semibold text-gray-700">{filtered.length}</span>
-                  {(search || filterBrand) && (
-                    <span className="text-gray-400"> (filtrés sur {products.length})</span>
-                  )}
-                  {someSelected && (
-                    <span className="text-gray-500 ml-2">· {selected.size} sélectionné{selected.size > 1 ? 's' : ''}</span>
-                  )}
-                </p>
-
-                {/* Per-page selector */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-400">Afficher</span>
-                  <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-                    {[50, 100, 500, 1000].map((size) => (
-                      <button
-                        key={size}
-                        onClick={() => setPageSize(size)}
-                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-                          pageSize === size
-                            ? 'bg-gray-900 text-white'
-                            : 'text-gray-500 hover:bg-gray-100'
-                        }`}
-                      >
-                        {size}
-                      </button>
-                    ))}
+            {/* Pagination footer */}
+            {!loading && filtered.length > 0 && (
+              <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-gray-500">{pageStart}–{pageEnd} sur <span className="font-semibold text-gray-700">{filtered.length}</span>
+                    {(search || filterBrand) && <span className="text-gray-400"> (sur {products.length})</span>}
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-400">Afficher</span>
+                    <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                      {[50,100,500,1000].map(s => (
+                        <button key={s} onClick={() => setPageSize(s)}
+                          className={cn('px-2.5 py-1 text-xs font-medium transition-colors', pageSize === s ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100')}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-400">/ page</span>
                   </div>
-                  <span className="text-xs text-gray-400">/ page</span>
                 </div>
-              </div>
-
-              {/* Right: page navigation */}
-              {totalPages > 1 && (
-                <div className="flex items-center gap-1.5">
-                  {/* First */}
-                  <button
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs"
-                    title="Première page"
-                  >
-                    «
-                  </button>
-                  {/* Prev */}
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs"
-                  >
-                    ‹
-                  </button>
-
-                  {/* Page numbers */}
-                  <div className="flex items-center gap-1">
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => setCurrentPage(1)} disabled={currentPage===1} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 disabled:opacity-30 text-xs">«</button>
+                    <button onClick={() => setCurrentPage(p => Math.max(1,p-1))} disabled={currentPage===1} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 disabled:opacity-30 text-xs">‹</button>
                     {(() => {
-                      const pages: (number | '…')[] = []
-                      if (totalPages <= 7) {
-                        for (let i = 1; i <= totalPages; i++) pages.push(i)
-                      } else {
+                      const pages: (number|'…')[] = []
+                      if (totalPages <= 7) for (let i=1;i<=totalPages;i++) pages.push(i)
+                      else {
                         pages.push(1)
                         if (currentPage > 3) pages.push('…')
-                        for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-                          pages.push(i)
-                        }
-                        if (currentPage < totalPages - 2) pages.push('…')
+                        for (let i=Math.max(2,currentPage-1);i<=Math.min(totalPages-1,currentPage+1);i++) pages.push(i)
+                        if (currentPage < totalPages-2) pages.push('…')
                         pages.push(totalPages)
                       }
-                      return pages.map((page, i) =>
-                        page === '…' ? (
-                          <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center text-xs text-gray-400">…</span>
-                        ) : (
-                          <button
-                            key={page}
-                            onClick={() => setCurrentPage(page as number)}
-                            className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-medium transition-all ${
-                              currentPage === page
-                                ? 'bg-gray-900 text-white border border-gray-900'
-                                : 'border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        )
-                      )
+                      return pages.map((pg,i) => pg === '…' ? <span key={i} className="w-7 h-7 flex items-center justify-center text-xs text-gray-400">…</span> : (
+                        <button key={`page-${pg}-${i}`} onClick={() => setCurrentPage(pg as number)}
+                          className={cn('w-7 h-7 flex items-center justify-center rounded-lg text-xs font-medium transition-all', currentPage === pg ? 'bg-gray-900 text-white' : 'border border-gray-200 text-gray-600 hover:border-gray-400')}>
+                          {pg}
+                        </button>
+                      ))
                     })()}
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages,p+1))} disabled={currentPage===totalPages} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 disabled:opacity-30 text-xs">›</button>
+                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage===totalPages} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 disabled:opacity-30 text-xs">»</button>
                   </div>
-
-                  {/* Next */}
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs"
-                  >
-                    ›
-                  </button>
-                  {/* Last */}
-                  <button
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs"
-                    title="Dernière page"
-                  >
-                    »
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </Card>
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════
-          MODAL — Ajouter / Modifier
-      ════════════════════════════════════════════════════ */}
-      {(modal === 'add' || modal === 'edit') && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && closeModal()}>
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+      {/* ── MODAL add/edit ── */}
+      <Dialog open={modal === 'add' || modal === 'edit'} onOpenChange={o => !o && closeModal()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{modal === 'add' ? 'Ajouter un produit' : 'Modifier le produit'}</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <div className="space-y-4">
+              <div><Label>Nom <span className="text-red-400">*</span></Label><Input placeholder="ex. T-shirt oversize" value={form.name} onChange={e => setForm({...form, name: e.target.value})}/></div>
+              <div><Label>Référence <span className="text-red-400">*</span></Label><Input placeholder="TSH-001" value={form.reference} onChange={e => setForm({...form, reference: e.target.value.toUpperCase()})} className="font-mono uppercase"/></div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">{modal === 'add' ? 'Ajouter un produit' : 'Modifier le produit'}</h2>
-                {modal === 'edit' && editTarget && <p className="text-sm text-gray-400 mt-0.5">{editTarget.name}</p>}
-              </div>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">Nom du produit <span className="text-red-400">*</span></label>
-                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="ex. T-shirt oversize coton bio" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">Référence <span className="text-red-400">*</span></label>
-                <input type="text" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value.toUpperCase() })} placeholder="ex. TSH-001" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-black uppercase" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">Marque <span className="text-red-400">*</span></label>
+                <Label>Marque <span className="text-red-400">*</span></Label>
                 <div className="flex gap-2">
-                  <select value={form.brand_id} onChange={(e) => setForm({ ...form, brand_id: e.target.value })} className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
-                    <option value="">Sélectionner une marque</option>
-                    {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                  <button onClick={() => setModal('brand')} className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:border-black transition-colors whitespace-nowrap">+ Marque</button>
+                  <Select value={form.brand_id} onValueChange={v => setForm({...form, brand_id: v})}>
+                    <SelectTrigger className="flex-1"><SelectValue placeholder="Choisir une marque"/></SelectTrigger>
+                    <SelectContent>{brands.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Button variant="outline" size="md" onClick={() => setModal('brand')}><Plus size={14}/> Marque</Button>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Prix (€) <span className="text-red-400">*</span></label>
-                  <div className="relative">
-                    <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0.00" min="0" step="0.01" className="w-full border border-gray-200 rounded-xl pl-4 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">€</span>
-                  </div>
+                  <Label>Prix (€) <span className="text-red-400">*</span></Label>
+                  <Input type="number" placeholder="0.00" min="0" step="0.01" value={form.price} onChange={e => setForm({...form, price: e.target.value})}/>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Remise (%) <span className="text-gray-400 font-normal">– optionnel</span></label>
-                  <div className="relative">
-                    <input type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} placeholder="0" min="0" max="100" step="1" className="w-full border border-gray-200 rounded-xl pl-4 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
-                  </div>
+                  <Label>Remise (%)</Label>
+                  <Input type="number" placeholder="0" min="0" max="100" value={form.discount} onChange={e => setForm({...form, discount: e.target.value})}/>
                 </div>
               </div>
               {form.price && Number(form.price) > 0 && (
                 <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between">
                   <span className="text-sm text-gray-500">Prix affiché en caisse</span>
                   <div className="flex items-baseline gap-2">
-                    {form.discount && Number(form.discount) > 0 && (
-                      <span className="text-sm text-gray-400 line-through">{Number(form.price).toFixed(2)} €</span>
-                    )}
-                    <span className="text-lg font-bold text-gray-900">
-                      {(Number(form.price) * (1 - (form.discount && Number(form.discount) > 0 ? Number(form.discount) : 0) / 100)).toFixed(2)} €
-                    </span>
+                    {Number(form.discount) > 0 && <span className="text-sm text-gray-400 line-through">{Number(form.price).toFixed(2)} €</span>}
+                    <span className="text-lg font-black text-gray-900">{(Number(form.price)*(1-(Number(form.discount)||0)/100)).toFixed(2)} €</span>
                   </div>
                 </div>
               )}
-
-              {/* ── Photo produit ── */}
-              <ProductImageUpload
-                currentUrl={form.image_url}
-                onUpload={handleImageUpload}
-                onRemove={handleImageRemove}
-                uploading={imageUploading}
-              />
-
+              <ProductImageUpload currentUrl={form.image_url} onUpload={handleImageUpload} onRemove={handleImageRemove} uploading={imageUploading}/>
               {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2.5 rounded-xl">{error}</p>}
             </div>
-            <div className="px-6 pb-5 flex gap-3">
-              <button onClick={closeModal} disabled={saving} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">Annuler</button>
-              <button onClick={handleSave} disabled={saving} className="flex-[2] py-2.5 bg-black text-white rounded-xl text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 transition-colors">
-                {saving ? 'Enregistrement...' : modal === 'add' ? '+ Ajouter le produit' : '✓ Enregistrer les modifications'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={saving}>Annuler</Button>
+            <Button onClick={handleSave} disabled={saving || imageUploading}>
+              {saving ? <><Spinner size="sm"/> Enregistrement…</> : modal === 'add' ? 'Ajouter le produit' : 'Enregistrer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* ════════════════════════════════════════════════════
-          MODAL — Supprimer
-      ════════════════════════════════════════════════════ */}
-      {modal === 'delete' && deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && closeModal()}>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
-            {deleteMode === 'linked' ? (
-              <>
-                <div className="text-center mb-5">
-                  <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4"><span className="text-2xl">⚠️</span></div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Impossible de supprimer</h2>
-                  <p className="text-sm text-gray-500 mb-4"><span className="font-semibold text-gray-800">{deleteTarget.name}</span> est associé à des ventes passées. La suppression briserait l'historique.</p>
+      {/* ── MODAL delete ── */}
+      <Dialog open={modal === 'delete' && !!deleteTarget} onOpenChange={o => !o && closeModal()}>
+        <DialogContent className="max-w-md">
+          {deleteMode === 'linked' ? (
+            <>
+              <DialogHeader><DialogTitle>Impossible de supprimer</DialogTitle></DialogHeader>
+              <DialogBody>
+                <div className="text-center space-y-4">
+                  <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-2xl">⚠️</div>
+                  <p className="text-sm text-gray-500"><span className="font-semibold text-gray-800">{deleteTarget?.name}</span> est associé à des ventes passées.</p>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-left">
-                    <p className="text-xs font-bold text-amber-800 mb-1">💡 Solution recommandée : Archiver</p>
-                    <p className="text-xs text-amber-700">Le produit n'apparaîtra plus en caisse, mais l'historique reste intact.</p>
+                    <p className="text-xs font-bold text-amber-800 mb-1">💡 Solution : Archiver</p>
+                    <p className="text-xs text-amber-700">Le produit n'apparaîtra plus en caisse mais l'historique reste intact.</p>
                   </div>
                 </div>
-                {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2.5 rounded-xl mb-4 text-center">{error}</p>}
-                <div className="flex gap-3">
-                  <button onClick={closeModal} disabled={saving} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Annuler</button>
-                  <button onClick={handleArchiveSingle} disabled={saving} className="flex-[2] py-2.5 bg-gray-800 text-white rounded-xl text-sm font-semibold hover:bg-black disabled:opacity-50">
-                    {saving ? 'Archivage...' : '📦 Archiver le produit'}
-                  </button>
+                {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2.5 rounded-xl mt-4">{error}</p>}
+              </DialogBody>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeModal} disabled={saving}>Annuler</Button>
+                <Button onClick={handleArchiveSingle} disabled={saving}>
+                  {saving ? <Spinner size="sm"/> : <><Archive size={14}/> Archiver le produit</>}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader><DialogTitle>Supprimer ce produit ?</DialogTitle></DialogHeader>
+              <DialogBody>
+                <div className="text-center space-y-3">
+                  <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto"><Trash2 size={24} className="text-red-500"/></div>
+                  <p className="text-sm text-gray-500"><span className="font-semibold text-gray-800">{deleteTarget?.name}</span> sera définitivement supprimé. Cette action est irréversible.</p>
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="text-center mb-5">
-                  <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><span className="text-2xl">🗑</span></div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Supprimer ce produit ?</h2>
-                  <p className="text-sm text-gray-500"><span className="font-medium text-gray-700">{deleteTarget.name}</span> sera définitivement supprimé. Cette action est irréversible.</p>
-                </div>
-                {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2.5 rounded-xl mb-4 text-center">{error}</p>}
-                <div className="flex gap-3">
-                  <button onClick={closeModal} disabled={saving} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Annuler</button>
-                  <button onClick={handleDelete} disabled={saving} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 disabled:opacity-50">
-                    {saving ? 'Vérification...' : 'Oui, supprimer'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+                {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2.5 rounded-xl mt-4">{error}</p>}
+              </DialogBody>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeModal} disabled={saving}>Annuler</Button>
+                <Button variant="destructive" onClick={handleDelete} disabled={saving}>
+                  {saving ? <Spinner size="sm"/> : 'Supprimer'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
-      {/* ════════════════════════════════════════════════════
-          MODAL — Nouvelle marque
-      ════════════════════════════════════════════════════ */}
-      {modal === 'brand' && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && closeModal()}>
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-gray-900">Nouvelle marque</h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
+      {/* ── MODAL nouvelle marque ── */}
+      <Dialog open={modal === 'brand'} onOpenChange={o => !o && closeModal()}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Nouvelle marque</DialogTitle></DialogHeader>
+          <DialogBody>
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">Nom de la marque <span className="text-red-400">*</span></label>
-                <input type="text" value={newBrandName} onChange={(e) => setNewBrandName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateBrand()} placeholder="ex. Jacquemus, Ami Paris..." autoFocus className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              <div><Label>Nom de la marque <span className="text-red-400">*</span></Label>
+                <Input placeholder="ex. Jacquemus" value={newBrandName} onChange={e => setNewBrandName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCreateBrand()} autoFocus/>
               </div>
               {brands.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-2">Marques existantes</p>
-                  <div className="flex flex-wrap gap-2">
-                    {brands.map((b) => (
-                      <span key={b.id} className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">{b.name}</span>
-                    ))}
-                  </div>
+                <div><p className="text-xs text-gray-400 mb-2">Marques existantes</p>
+                  <div className="flex flex-wrap gap-2">{brands.map(b => <Badge key={b.id} variant="secondary">{b.name}</Badge>)}</div>
                 </div>
               )}
               {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-xl">{error}</p>}
-              <div className="flex gap-3 pt-1">
-                <button onClick={closeModal} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Annuler</button>
-                <button onClick={handleCreateBrand} disabled={!newBrandName.trim() || saving} className="flex-1 py-2.5 bg-black text-white rounded-xl text-sm font-semibold hover:bg-gray-800 disabled:opacity-40">
-                  {saving ? 'Création...' : 'Créer'}
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
-      )}
-    </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal}>Annuler</Button>
+            <Button onClick={handleCreateBrand} disabled={!newBrandName.trim() || saving}>
+              {saving ? <Spinner size="sm"/> : 'Créer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
   )
 }
