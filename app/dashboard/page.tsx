@@ -198,7 +198,7 @@ export default function DashboardPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-8xl mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
 
           {/* Header */}
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -215,9 +215,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Filters row */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               {/* Period presets */}
-              <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-0.5">
+              <div className="flex flex-wrap bg-white border border-gray-200 rounded-xl p-1 gap-0.5">
                 {PERIOD_PRESETS.map(([p,label]) => (
                   <button key={p} onClick={()=>{setPeriod(p as any)}}
                     className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-all', period===p?'bg-gray-900 text-white shadow-sm':'text-gray-600 hover:bg-gray-50')}>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
           ) : (
             <>
               {/* KPIs */}
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
                 {[
                   { label:"Chiffre d'affaires", value:fmt(totalRevenue),    sub:`${filtered.length} ventes`,      icon:<TrendingUp size={18}/> },
                   { label:'Ticket moyen',        value:fmt(avgTicket),       sub:`${totalItems} articles`,          icon:<ShoppingCart size={18}/> },
@@ -280,7 +280,7 @@ export default function DashboardPage() {
 
               {/* Tabs */}
               <Tabs defaultValue="overview">
-                <TabsList className="mb-6">
+                <TabsList className="mb-6 overflow-x-auto flex-nowrap max-w-full">
                   <TabsTrigger value="overview">📊 Vue générale</TabsTrigger>
                   <TabsTrigger value="brands">🏷 Par marque</TabsTrigger>
                   <TabsTrigger value="sales">🧾 Ventes</TabsTrigger>

@@ -72,7 +72,7 @@ export default function ClientsPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-8xl mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -80,11 +80,11 @@ export default function ClientsPage() {
               <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
               <p className="text-gray-500 text-sm mt-0.5">Programme de fidélité · {customers.length} membres</p>
             </div>
-            <Button variant="outline" onClick={exportCSV}><Download size={14}/> Exporter CSV</Button>
+            <Button variant="outline" onClick={exportCSV} className="gap-1.5 px-2.5 sm:px-4"><Download size={14}/><span className="hidden sm:inline">Exporter CSV</span></Button>
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-3 lg:gap-4">
             <StatCard label="Total membres"  value={customers.length}                           icon={<Users size={18}/>}/>
             <StatCard label="CA cumulé"       value={`${totalSpend.toFixed(0)} €`}              icon={<TrendingUp size={18}/>}/>
             <StatCard label="Avec remise"     value={withDisc}                                  icon={<Tag size={18}/>}/>
@@ -92,7 +92,7 @@ export default function ClientsPage() {
           </div>
 
           {/* Tier filter cards */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {byTier.map(t => (
               <button key={t.id} onClick={() => setFilterTier(filterTier===t.id?'':t.id)}
                 className={cn('rounded-2xl p-4 border-2 text-left transition-all hover:scale-[1.02]', filterTier===t.id ? 'shadow-md scale-[1.02]' : 'border-transparent')}
@@ -116,7 +116,7 @@ export default function ClientsPage() {
           </div>
 
           {/* Table */}
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden"><div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
@@ -166,6 +166,7 @@ export default function ClientsPage() {
                 ))}
               </tbody>
             </table>
+            </div>{/* overflow-x-auto */}
             {!loading && filtered.length > 0 && (
               <div className="px-6 py-3 border-t border-gray-50 bg-gray-50/50">
                 <p className="text-xs text-gray-400">{filtered.length} client{filtered.length>1?'s':''}</p>

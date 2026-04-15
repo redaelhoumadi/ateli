@@ -24,7 +24,7 @@ const TIER_BADGE: Record<string, { icon: string; cls: string }> = {
   vip:    { icon: '💜', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
 }
 
-export function Cart({ onCheckout }: { onCheckout: () => void }) {
+export function Cart({ onCheckout, onClose, isMobile }: { onCheckout: () => void; onClose?: () => void; isMobile?: boolean }) {
   const {
     items, customer, customerTotalSpend,
     updateQuantity, removeItem, clearCart,

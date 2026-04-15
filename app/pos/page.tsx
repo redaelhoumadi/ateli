@@ -48,17 +48,11 @@ export default function POSPage() {
       <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
 
         {/* ── POS top bar ── */}
-        <header className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm">
-          {/* Left: page title + seller */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-gray-700">
-              <Monitor size={16} className="text-gray-400" />
-              <span className="text-sm font-bold">Caisse</span>
-            </div>
-            <Separator orientation="vertical" className="h-5" />
-            {/* Seller select */}
+        <header className="bg-white border-b border-gray-100 px-3 py-2 flex items-center justify-between shrink-0 shadow-sm gap-2">
+          {/* Seller select */}
+          <div className="flex items-center gap-2 min-w-0">
             <Select value={sellerId} onValueChange={setSellerId}>
-              <SelectTrigger className="w-36 h-8 text-xs border-gray-200 rounded-lg">
+              <SelectTrigger className="w-32 sm:w-40 h-8 text-xs border-gray-200 rounded-lg">
                 <SelectValue placeholder="Vendeur…" />
               </SelectTrigger>
               <SelectContent>
@@ -68,11 +62,12 @@ export default function POSPage() {
           </div>
 
           {/* Right: QR + Cart */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="default" size="sm" onClick={() => setShowQR(true)} className="gap-2">
-                  <QrCode size={14} /> QR Fidélité
+                <Button variant="default" size="sm" onClick={() => setShowQR(true)} className="gap-1.5 px-2.5 sm:px-3.5">
+                  <QrCode size={14} />
+                  <span className="hidden sm:inline">QR Fidélité</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Afficher le QR code client</TooltipContent>
@@ -85,10 +80,10 @@ export default function POSPage() {
                   size="sm"
                   onClick={() => setCartOpen(v => !v)}
                   disabled={!cartHasItems}
-                  className={cn('gap-2 relative', !cartHasItems && 'opacity-40 cursor-not-allowed')}
+                  className={cn('gap-1.5 px-2.5 sm:px-3.5 relative', !cartHasItems && 'opacity-40 cursor-not-allowed')}
                 >
                   <ShoppingBag size={14} />
-                  Panier
+                  <span className="hidden sm:inline">Panier</span>
                   {itemCount > 0 && (
                     <span className={cn(
                       'min-w-[18px] h-[18px] px-1 rounded-full text-xs font-black flex items-center justify-center',
@@ -111,9 +106,19 @@ export default function POSPage() {
             <ProductCatalog />
           </div>
 
-          {/* Cart panel */}
+          {/* Cart panel — sidebar on desktop, overlay on mobile */}
+          {/* Mobile overlay cart */}
+          {cartOpen && cartHasItems && (
+            <div className="lg:hidden fixed inset-0 z-30 flex flex-col" style={{top:0}}>
+              <div className="flex-1 bg-black/30" onClick={() => setCartOpen(false)} />
+              <div className="bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[85vh]">
+                <Cart onCheckout={() => { setShowCheckout(true) }} onClose={() => setCartOpen(false)} isMobile />
+              </div>
+            </div>
+          )}
+          {/* Desktop sidebar cart */}
           <div className={cn(
-            'flex flex-col bg-white border-l border-gray-100 transition-all duration-300 ease-in-out overflow-hidden shrink-0',
+            'hidden lg:flex flex-col bg-white border-l border-gray-100 transition-all duration-300 ease-in-out overflow-hidden shrink-0',
             cartOpen && cartHasItems ? 'w-96 opacity-100' : 'w-0 opacity-0 border-l-0'
           )}>
             <div className="w-96 h-full flex flex-col">

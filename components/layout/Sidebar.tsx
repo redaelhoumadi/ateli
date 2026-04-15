@@ -19,11 +19,9 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard',   icon: BarChart2,  description: 'Analyse des ventes' },
 ]
 
-type Props = { extraBottom?: React.ReactNode }
-
-export function Sidebar({ extraBottom }: Props) {
-  const pathname = usePathname()
-  const [open, setOpen]       = useState(false)
+export function Sidebar() {
+  const pathname    = usePathname()
+  const [open, setOpen]           = useState(false)
   const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => { setOpen(false) }, [pathname])
@@ -37,7 +35,102 @@ export function Sidebar({ extraBottom }: Props) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      {/* ══ DESKTOP SIDEBAR ══════════════════════════════════ */}
+
+      {/* ══════════════════════════════════════════════════════
+          MOBILE — top bar (visible only on < lg)
+      ══════════════════════════════════════════════════════ */}
+      <header className="lg:hidden flex items-center justify-between bg-white border-b border-gray-100 px-4 py-3 shrink-0 z-30">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-gray-900 rounded-xl flex items-center justify-center shrink-0">
+            <ShoppingCart size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-gray-900 leading-none">Ateli POS</p>
+            <p className="text-xs text-gray-400 leading-none mt-0.5">Concept Store</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setOpen(true)}
+          className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+          aria-label="Ouvrir le menu"
+        >
+          <Menu size={18} />
+        </button>
+      </header>
+
+      {/* ══════════════════════════════════════════════════════
+          MOBILE — drawer overlay + panel
+      ══════════════════════════════════════════════════════ */}
+      {open && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      <div className={cn(
+        'lg:hidden fixed inset-y-0 left-0 z-50 w-72 bg-white flex flex-col shadow-2xl',
+        'transition-transform duration-300 ease-in-out',
+        open ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        {/* Drawer header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gray-900 rounded-xl flex items-center justify-center">
+              <ShoppingCart size={16} className="text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 leading-none">Ateli POS</p>
+              <p className="text-xs text-gray-400 mt-0.5 leading-none">Concept Store</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Drawer nav */}
+        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+          {NAV_ITEMS.map((item) => {
+            const active = isActive(item.href)
+            const Icon = item.icon
+            return (
+              <a key={item.href} href={item.href}
+                className={cn(
+                  'group flex items-center gap-3 rounded-xl px-3 py-3 transition-all',
+                  active ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                )}>
+                <Icon size={18} className={cn('shrink-0', active ? 'text-white' : 'text-gray-400 group-hover:text-gray-700')} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">{item.label}</p>
+                  <p className={cn('text-xs truncate', active ? 'text-white/60' : 'text-gray-400')}>{item.description}</p>
+                </div>
+                {active && <div className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />}
+              </a>
+            )
+          })}
+        </nav>
+
+        {/* QR link */}
+        <div className="px-3 py-3 border-t border-gray-100 shrink-0">
+          <a href="/qr" target="_blank"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+            <QrCode size={18} className="text-gray-400 shrink-0" />
+            <span className="font-medium">QR Fidélité plein écran</span>
+          </a>
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-100 shrink-0">
+          <p className="text-xs text-gray-300">Ateli POS · v2.0</p>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════
+          DESKTOP — sidebar (hidden on mobile)
+      ══════════════════════════════════════════════════════ */}
       <aside className={cn(
         'hidden lg:flex flex-col bg-white border-r border-gray-100 h-full shrink-0 transition-all duration-300',
         collapsed ? 'w-[68px]' : 'w-56'
@@ -55,7 +148,7 @@ export function Sidebar({ extraBottom }: Props) {
           )}
         </div>
 
-        {/* Nav items */}
+        {/* Nav */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const active = isActive(item.href)
@@ -66,7 +159,8 @@ export function Sidebar({ extraBottom }: Props) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'group flex items-center gap-3 rounded-xl transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900',
+                  'group flex items-center gap-3 rounded-xl transition-all duration-150',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900',
                   collapsed ? 'px-0 py-2.5 justify-center' : 'px-3 py-2.5',
                   active
                     ? 'bg-gray-900 text-white shadow-sm'
@@ -97,14 +191,8 @@ export function Sidebar({ extraBottom }: Props) {
 
         <Separator />
 
-        {/* Extra slot (seller, QR, etc.) */}
-        {extraBottom && !collapsed && (
-          <div className="px-3 py-3 space-y-1.5">{extraBottom}</div>
-        )}
-
-        {/* QR + Collapse toggle */}
+        {/* QR + collapse */}
         <div className={cn('px-2 py-3 space-y-0.5', collapsed && 'flex flex-col items-center')}>
-          {/* QR link */}
           <Tooltip>
             <TooltipTrigger asChild>
               <a href="/qr" target="_blank"
@@ -123,7 +211,6 @@ export function Sidebar({ extraBottom }: Props) {
 
           <Separator />
 
-          {/* Collapse toggle */}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
@@ -139,110 +226,13 @@ export function Sidebar({ extraBottom }: Props) {
           </button>
         </div>
 
-        {/* Version */}
         {!collapsed && (
-          <div className="px-4 py-2.5 border-t border-gray-100">
+          <div className="px-4 py-2.5 border-t border-gray-100 shrink-0">
             <p className="text-xs text-gray-300">Ateli POS · v2.0</p>
           </div>
         )}
       </aside>
 
-      {/* ══ MOBILE TOP BAR ═══════════════════════════════════ */}
-      <header className="lg:hidden flex items-center justify-between bg-white border-b border-gray-100 px-4 py-3 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-gray-900 rounded-xl flex items-center justify-center">
-            <ShoppingCart size={14} className="text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-gray-900 leading-none">Ateli POS</p>
-            <p className="text-xs text-gray-400 leading-none mt-0.5">Concept Store</p>
-          </div>
-        </div>
-        <button
-          onClick={() => setOpen(true)}
-          className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-          aria-label="Ouvrir le menu"
-        >
-          <Menu size={18} />
-        </button>
-      </header>
-
-      {/* ══ MOBILE DRAWER ════════════════════════════════════ */}
-      {/* Overlay */}
-      {open && (
-        <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
-        />
-      )}
-
-      {/* Drawer */}
-      <div className={cn(
-        'lg:hidden fixed inset-y-0 left-0 z-50 w-72 bg-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out',
-        open ? 'translate-x-0' : '-translate-x-full'
-      )}>
-        {/* Drawer header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gray-900 rounded-xl flex items-center justify-center">
-              <ShoppingCart size={16} className="text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-gray-900 leading-none">Ateli POS</p>
-              <p className="text-xs text-gray-400 mt-0.5 leading-none">Concept Store</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setOpen(false)}
-            className="w-8 h-8 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Drawer nav */}
-        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
-            const active = isActive(item.href)
-            const Icon = item.icon
-            return (
-              <a key={item.href} href={item.href}
-                className={cn(
-                  'group flex items-center gap-3 rounded-xl px-3 py-3 transition-all',
-                  active
-                    ? 'bg-gray-900 text-white'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                )}>
-                <Icon size={18} className={cn('shrink-0', active ? 'text-white' : 'text-gray-400 group-hover:text-gray-700')} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold">{item.label}</p>
-                  <p className={cn('text-xs truncate', active ? 'text-white/60' : 'text-gray-400')}>{item.description}</p>
-                </div>
-                {active && <div className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />}
-              </a>
-            )
-          })}
-        </nav>
-
-        {extraBottom && (
-          <div className="px-4 py-4 border-t border-gray-100 space-y-2">
-            {extraBottom}
-          </div>
-        )}
-
-        {/* QR link in drawer */}
-        <div className="px-3 py-3 border-t border-gray-100">
-          <a href="/qr" target="_blank"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
-            <QrCode size={18} className="text-gray-400" />
-            <span className="font-medium">QR Fidélité plein écran</span>
-          </a>
-        </div>
-
-        <div className="px-5 py-3 border-t border-gray-100">
-          <p className="text-xs text-gray-300">Ateli POS · v2.0</p>
-        </div>
-      </div>
     </TooltipProvider>
   )
 }

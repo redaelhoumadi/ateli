@@ -31,7 +31,7 @@ export default function ProduitsPage() {
   const [loading, setLoading]       = useState(true)
   const [bulkLoading, setBulkLoading] = useState(false)
   const [search, setSearch]         = useState('')
-  const [filterBrand, setFilterBrand] = useState('all')
+  const [filterBrand, setFilterBrand] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [selected, setSelected]     = useState<Set<string>>(new Set())
   const [modal, setModal]           = useState<'add'|'edit'|'delete'|'brand'|null>(null)
@@ -65,7 +65,7 @@ export default function ProduitsPage() {
       const ms = !search || p.name.toLowerCase().includes(search.toLowerCase())
         || p.reference.toLowerCase().includes(search.toLowerCase())
         || p.brand?.name?.toLowerCase().includes(search.toLowerCase())
-      const mb = filterBrand === 'all' || p.brand_id === filterBrand
+      const mb = !filterBrand || p.brand_id === filterBrand
       const ma = showArchived ? (p as any).is_active === false : (p as any).is_active !== false
       return ms && mb && ma
     })
@@ -205,7 +205,7 @@ export default function ProduitsPage() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-8xl mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
 
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -213,18 +213,18 @@ export default function ProduitsPage() {
               <h1 className="text-2xl font-bold text-gray-900">Catalogue produits</h1>
               <p className="text-gray-500 text-sm mt-0.5">Gérez vos produits et vos marques</p>
             </div>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => { setNewBrandName(''); setError(''); setModal('brand') }}>
-                <Tag size={14}/> Nouvelle marque
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setNewBrandName(''); setError(''); setModal('brand') }} className="gap-1.5 px-2.5 sm:px-4">
+                <Tag size={14}/><span className="hidden sm:inline">Nouvelle marque</span>
               </Button>
-              <Button onClick={openAdd}>
-                <Plus size={14}/> Ajouter un produit
+              <Button size="sm" onClick={openAdd} className="gap-1.5 px-2.5 sm:px-4">
+                <Plus size={14}/><span className="hidden sm:inline">Ajouter</span><span className="sm:hidden">+</span>
               </Button>
             </div>
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-3 lg:gap-4">
             <StatCard label="Produits actifs"  value={activeCount}              icon={<Package size={18}/>}/>
             <StatCard label="Archivés"          value={archivedCount}            icon={<Archive size={18}/>}/>
             <StatCard label="Prix moyen"        value={`${avgPrice.toFixed(2)} €`} icon={<span className="text-base">💶</span>}/>
@@ -232,7 +232,7 @@ export default function ProduitsPage() {
           </div>
 
           {/* Filters */}
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <Input icon={<Search size={14}/>} placeholder="Nom, référence ou marque…" value={search} onChange={e => setSearch(e.target.value)} className="flex-1"/>
             <Select value={filterBrand} onValueChange={setFilterBrand}>
               <SelectTrigger className="w-48"><SelectValue placeholder="Toutes les marques"/></SelectTrigger>
@@ -286,7 +286,7 @@ export default function ProduitsPage() {
 
           {/* Table */}
           <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto -mx-0">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
@@ -422,7 +422,7 @@ export default function ProduitsPage() {
                         pages.push(totalPages)
                       }
                       return pages.map((pg,i) => pg === '…' ? <span key={i} className="w-7 h-7 flex items-center justify-center text-xs text-gray-400">…</span> : (
-                        <button key={`page-${pg}-${i}`} onClick={() => setCurrentPage(pg as number)}
+                        <button key={`${pg}-${i}`} onClick={() => setCurrentPage(pg as number)}
                           className={cn('w-7 h-7 flex items-center justify-center rounded-lg text-xs font-medium transition-all', currentPage === pg ? 'bg-gray-900 text-white' : 'border border-gray-200 text-gray-600 hover:border-gray-400')}>
                           {pg}
                         </button>

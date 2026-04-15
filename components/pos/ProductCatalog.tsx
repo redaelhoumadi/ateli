@@ -33,7 +33,7 @@ export function ProductCatalog() {
   const finalPrice = (p: Product) => p.discount ? p.price * (1 - p.discount / 100) : p.price
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden p-3 gap-3">
+    <div className="flex-1 flex flex-col overflow-hidden p-2 sm:p-3 gap-2 sm:gap-3">
       {/* Search */}
       <Input
         icon={<Search size={15} />}
@@ -100,12 +100,12 @@ export function ProductCatalog() {
                   </div>
 
                   {/* Info */}
-                  <div className="p-3 flex-1 flex flex-col gap-1">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide truncate">{p.brand?.name}</p>
-                    <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight flex-1">{p.name}</p>
-                    <p className="text-xs text-gray-400">Réf: {p.reference}</p>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-base font-black text-gray-900">{price.toFixed(2)} €</span>
+                  <div className="p-2 sm:p-3 flex-1 flex flex-col gap-0.5 sm:gap-1">
+                    <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide truncate">{p.brand?.name}</p>
+                    <p className="text-xs sm:text-sm font-semibold text-gray-900 line-clamp-2 leading-tight flex-1">{p.name}</p>
+                    <p className="hidden sm:block text-xs text-gray-400">Réf: {p.reference}</p>
+                    <div className="flex items-baseline gap-1.5 mt-1">
+                      <span className="text-sm sm:text-base font-black text-gray-900">{price.toFixed(2)} €</span>
                       {p.discount && <span className="text-xs text-gray-400 line-through">{p.price.toFixed(2)} €</span>}
                     </div>
                   </div>

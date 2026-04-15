@@ -81,7 +81,7 @@ export function CustomerSelector() {
   if (customer) {
     const tier = getTierForSpend(customerTotalSpend)
     return (
-      <div className="mx-3 mt-3 rounded-xl px-4 py-3 flex items-center justify-between border"
+      <div className="mx-2 sm:mx-3 mt-2 sm:mt-3 rounded-xl px-3 py-2.5 flex items-center justify-between border"
         style={{ background: tier.bg, borderColor: `${tier.color}33` }}>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
@@ -110,7 +110,7 @@ export function CustomerSelector() {
 
   // ── Search bar ───────────────────────────────────────────
   return (
-    <div ref={wrapperRef} className="mx-3 mt-3 relative">
+    <div ref={wrapperRef} className="mx-2 sm:mx-3 mt-2 sm:mt-3 relative">
       <div className="flex gap-2">
         <div className="flex-1 relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -134,8 +134,9 @@ export function CustomerSelector() {
           </div>
         </div>
         <Button variant="outline" size="md" onClick={() => setShowCreate(true)}
-          className="gap-2 shrink-0">
-          <UserPlus size={15} /> Nouveau
+          className="gap-1.5 shrink-0 px-2.5 sm:px-4">
+          <UserPlus size={15} />
+          <span className="hidden sm:inline">Nouveau</span>
         </Button>
       </div>
 

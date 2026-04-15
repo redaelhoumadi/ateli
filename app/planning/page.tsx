@@ -150,14 +150,14 @@ export default function PlanningPage() {
       <div className="max-w-full px-6 py-8 space-y-6">
 
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Planning boutique</h1>
             <p className="text-gray-500 text-sm">10h – 20h · Lundi au Samedi</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {/* View toggle */}
-            <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-1">
+            <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-1 self-start sm:self-auto">
               <button onClick={()=>setView('grid')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',view==='grid'?'bg-gray-900 text-white':'text-gray-600 hover:bg-gray-50')}>
                 <Grid size={14}/> Grille
               </button>
@@ -167,9 +167,9 @@ export default function PlanningPage() {
             </div>
 
             {/* Week nav */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Button variant="outline" size="icon" onClick={()=>setWeekKey(addWeeks(weekKey,-1))}><ChevronLeft size={16}/></Button>
-              <div className="text-center min-w-[200px]">
+              <div className="text-center min-w-[130px] sm:min-w-[200px]">
                 <p className="text-sm font-bold text-gray-900">{fmtWeek(weekKey)}</p>
                 {weekKey===getWeekKey(new Date())&&<p className="text-xs text-blue-500 font-medium">Semaine actuelle</p>}
               </div>
