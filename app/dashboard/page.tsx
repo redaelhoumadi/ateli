@@ -198,7 +198,7 @@ export default function DashboardPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-8xl mx-auto px-6 py-8 space-y-6">
 
           {/* Header */}
           <div className="flex flex-wrap items-start justify-between gap-4">
