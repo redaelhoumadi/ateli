@@ -445,7 +445,7 @@ export default function ProduitsPage() {
 
       {/* ── MODAL add/edit ── */}
       <Dialog open={modal === 'add' || modal === 'edit'} onOpenChange={o => !o && closeModal()}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{modal === 'add' ? 'Ajouter un produit' : 'Modifier le produit'}</DialogTitle>
           </DialogHeader>
@@ -497,7 +497,7 @@ export default function ProduitsPage() {
 
       {/* ── MODAL delete ── */}
       <Dialog open={modal === 'delete' && !!deleteTarget} onOpenChange={o => !o && closeModal()}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md overflow-y-auto">
           {deleteMode === 'linked' ? (
             <>
               <DialogHeader><DialogTitle>Impossible de supprimer</DialogTitle></DialogHeader>
@@ -542,7 +542,7 @@ export default function ProduitsPage() {
 
       {/* ── MODAL nouvelle marque ── */}
       <Dialog open={modal === 'brand'} onOpenChange={o => !o && closeModal()}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm overflow-y-auto">
           <DialogHeader><DialogTitle>Nouvelle marque</DialogTitle></DialogHeader>
           <DialogBody>
             <div className="space-y-4">

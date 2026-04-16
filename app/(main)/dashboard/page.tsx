@@ -54,7 +54,7 @@ function SaleModal({ sale, onClose }: { sale:Sale; onClose:()=>void }) {
 
   return (
     <Dialog open onOpenChange={o=>!o&&onClose()}>
-      <DialogContent className="max-w-md p-0 overflow-hidden">
+      <DialogContent className="max-w-md p-0 overflow-hidden" hideClose>
         <DialogTitle className="sr-only">Détail de la vente du {date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</DialogTitle>
         <div className="bg-gray-900 px-6 py-4 rounded-t-2xl">
           <div className="flex items-start justify-between">

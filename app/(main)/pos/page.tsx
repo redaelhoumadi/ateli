@@ -32,7 +32,11 @@ export default function POSPage() {
   const itemCount    = totalItems()
 
   useEffect(() => {
-    if (items.length > 0 && !cartOpen) setCartOpen(true)
+    // Auto-open cart on desktop only (lg+) when first item added
+    // On mobile, user must click the cart button explicitly
+    const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024
+    if (items.length > 0 && !cartOpen && isDesktop) setCartOpen(true)
+    // Always close when cart is emptied
     if (items.length === 0) setCartOpen(false)
   }, [items.length])
 
@@ -142,7 +146,7 @@ export default function POSPage() {
 
         {/* QR modal */}
         <Dialog open={showQR} onOpenChange={setShowQR}>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-sm overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Programme fidélité</DialogTitle>
             </DialogHeader>

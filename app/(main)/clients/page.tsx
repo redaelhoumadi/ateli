@@ -179,7 +179,7 @@ export default function ClientsPage() {
       {/* Detail modal */}
       <Dialog open={!!selected} onOpenChange={o => !o && setSelected(null)}>
         {selected && (
-          <DialogContent className="max-w-md p-0 overflow-hidden">
+          <DialogContent className="max-w-md p-0 overflow-hidden" hideClose>
             <DialogTitle className="sr-only">Fiche client {selected?.name}</DialogTitle>
             <div className="px-6 py-5 flex items-start justify-between" style={{background:selected.tier.bg}}>
               <div className="flex items-center gap-4">

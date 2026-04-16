@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { CreditCard, Banknote, Shuffle, X } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
 import { createSale } from '@/lib/supabase'
 import { getTierForSpend } from '@/lib/customerPortal'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-  Button, Badge, Separator, ScrollArea, Spinner, cn,
+  Button, Badge, Separator, Spinner, cn,
 } from '@/components/ui'
 import type { Sale } from '@/types'
 
@@ -17,6 +17,16 @@ const METHODS = [
   { id: 'mixed', label: 'Mixte',    Icon: Shuffle },
 ]
 const QUICK = [5, 10, 20, 50, 100, 200]
+
+const BRAND_COLORS = [
+  { bg: '#EEF2FF', border: '#C7D2FE', text: '#4338CA', dot: '#6366F1' },
+  { bg: '#F0FDF4', border: '#BBF7D0', text: '#15803D', dot: '#22C55E' },
+  { bg: '#FFF7ED', border: '#FED7AA', text: '#C2410C', dot: '#F97316' },
+  { bg: '#FDF4FF', border: '#E9D5FF', text: '#7E22CE', dot: '#A855F7' },
+  { bg: '#FFF1F2', border: '#FECDD3', text: '#BE123C', dot: '#F43F5E' },
+  { bg: '#ECFEFF', border: '#A5F3FC', text: '#0E7490', dot: '#06B6D4' },
+  { bg: '#FFFBEB', border: '#FDE68A', text: '#B45309', dot: '#F59E0B' },
+]
 
 export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (s: Sale) => void }) {
   const {
@@ -40,6 +50,24 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   const tot     = Math.max(0, sub - loyAmt - manAmt)
   const change  = paymentMethod === 'cash' ? Math.max(0, Number(cash) - tot) : 0
 
+  // Group items by brand for the recap
+  const brandGroups = useMemo(() => {
+    const map = new Map<string, { items: typeof items; subtotal: number; colorIdx: number }>()
+    let ci = 0; const bcm = new Map<string, number>()
+    items.forEach(item => {
+      const brand = item.product.brand?.name ?? 'Sans marque'
+      if (!bcm.has(brand)) { bcm.set(brand, ci % BRAND_COLORS.length); ci++ }
+      const ex = map.get(brand)
+      ex ? (ex.items.push(item), ex.subtotal += item.total_price)
+         : map.set(brand, { items: [item], subtotal: item.total_price, colorIdx: bcm.get(brand)! })
+    })
+    return Array.from(map.entries()).map(([name, d]) => ({ name, ...d }))
+  }, [items])
+
+  const isSingleBrand = brandGroups.length <= 1
+  // Apply discounts proportionally to each brand
+  const totalDiscountRate = sub > 0 ? (loyAmt + manAmt) / sub : 0
+
   const confirm = async () => {
     if (!sellerId) { setError('Sélectionnez un vendeur'); return }
     setLoading(true); setError('')
@@ -58,7 +86,7 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-xl flex flex-col overflow-hidden" hideClose>
         <DialogTitle className="sr-only">Encaissement</DialogTitle>
         {/* Dark header */}
         <div className="bg-gray-900 px-6 py-4 rounded-t-2xl flex items-center justify-between shrink-0">
@@ -71,7 +99,7 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
           </button>
         </div>
 
-        <ScrollArea className="max-h-[65vh]">
+        <div className="flex-1 overflow-y-auto">
           <div className="px-6 py-5 space-y-5">
             {/* Customer */}
             {customer && tier ? (
@@ -170,31 +198,89 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
             </div>
 
-            {/* Recap */}
+            {/* Recap — grouped by brand */}
             <div className="border border-gray-100 rounded-xl overflow-hidden">
               <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Récapitulatif</p>
               </div>
-              <div className="px-4 py-3 space-y-1.5 max-h-32 overflow-y-auto">
-                {items.map(item => (
-                  <div key={item.product.id} className="flex justify-between text-sm">
-                    <span className="text-gray-600 truncate mr-3">{item.product.name} ×{item.quantity}</span>
-                    <span className="font-medium shrink-0">{item.total_price.toFixed(2)} €</span>
-                  </div>
-                ))}
+
+              {/* Brand groups */}
+              <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                {brandGroups.map(group => {
+                  const p = BRAND_COLORS[group.colorIdx]
+                  const brandDiscount = group.subtotal * totalDiscountRate
+                  const brandNet = group.subtotal - brandDiscount
+                  const hasDiscount = totalDiscountRate > 0
+                  return (
+                    <div key={group.name}>
+                      {/* Brand header */}
+                      <div className="flex items-center justify-between px-4 py-2.5"
+                        style={{ background: p.bg, borderLeft: `3px solid ${p.dot}` }}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded flex items-center justify-center text-white text-[10px] font-black shrink-0"
+                            style={{ background: p.dot }}>{group.name[0]}</div>
+                          <span className="text-xs font-bold" style={{ color: p.text }}>{group.name}</span>
+                          <span className="text-xs opacity-60" style={{ color: p.text }}>
+                            · {group.items.reduce((s, i) => s + i.quantity, 0)} art.
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          {hasDiscount ? (
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xs line-through opacity-40" style={{ color: p.text }}>
+                                {group.subtotal.toFixed(2)} €
+                              </span>
+                              <span className="text-sm font-black" style={{ color: p.text }}>
+                                {brandNet.toFixed(2)} €
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-black" style={{ color: p.text }}>
+                              {group.subtotal.toFixed(2)} €
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Articles */}
+                      <div className="px-4 py-2 space-y-1"
+                        style={{ background: `${p.bg}55`, borderLeft: `3px solid ${p.dot}44` }}>
+                        {group.items.map(item => (
+                          <div key={item.product.id} className="flex justify-between text-xs text-gray-600">
+                            <span className="truncate mr-3">{item.product.name} ×{item.quantity}</span>
+                            <span className="shrink-0">{item.total_price.toFixed(2)} €</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-              <div className="px-4 py-3 border-t border-gray-100 space-y-1">
-                <div className="flex justify-between text-sm text-gray-500"><span>Sous-total</span><span>{sub.toFixed(2)} €</span></div>
-                {loyAmt > 0 && <div className="flex justify-between text-sm font-medium" style={{ color: tier?.color }}><span>Fidélité -{loyPct}%</span><span>-{loyAmt.toFixed(2)} €</span></div>}
-                {manAmt > 0 && <div className="flex justify-between text-sm font-medium text-orange-600"><span>Remise -{manPct}%</span><span>-{manAmt.toFixed(2)} €</span></div>}
+
+              {/* Totals */}
+              <div className="px-4 py-3 border-t border-gray-100 space-y-1.5 bg-white">
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>Sous-total</span><span>{sub.toFixed(2)} €</span>
+                </div>
+                {loyAmt > 0 && (
+                  <div className="flex justify-between text-sm font-medium" style={{ color: tier?.color }}>
+                    <span>Fidélité -{loyPct}%</span><span>-{loyAmt.toFixed(2)} €</span>
+                  </div>
+                )}
+                {manAmt > 0 && (
+                  <div className="flex justify-between text-sm font-medium text-orange-600">
+                    <span>Remise -{manPct}%</span><span>-{manAmt.toFixed(2)} €</span>
+                  </div>
+                )}
                 <Separator className="my-1" />
-                <div className="flex justify-between text-base font-black text-gray-900"><span>Total</span><span>{tot.toFixed(2)} €</span></div>
+                <div className="flex justify-between text-base font-black text-gray-900">
+                  <span>Total à encaisser</span><span>{tot.toFixed(2)} €</span>
+                </div>
               </div>
             </div>
 
             {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-600">{error}</div>}
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="px-6 py-4 border-t border-gray-100">
           <Button variant="outline" onClick={onClose} disabled={loading}>Annuler</Button>

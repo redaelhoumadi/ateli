@@ -248,15 +248,27 @@ export async function searchCustomers(term: string) {
 // Code court affiché dans l'espace client : les 8 premiers chars de l'UUID en majuscule
 // ex. "B51A3ECA" → id commence par "b51a3eca-..."
 export async function searchCustomerByCode(code: string) {
+  // Le code client = les 8 premiers caractères de l'UUID (sans tirets, insensible à la casse)
+  // UUID format: b51a3eca-ea76-4b77-9fc8-c47f99c62575
+  // Code affiché: B51A3ECA → correspond au début de l'UUID
   const normalized = code.trim().toLowerCase()
+
+  // On récupère tous les clients et on filtre côté JS sur les 8 premiers chars
+  // car ilike sur UUID peut être instable selon les versions Postgres/Supabase
   const { data, error } = await supabase
     .from('customers')
     .select('*')
-    .ilike('id', `${normalized}%`)
-    .maybeSingle()
 
   if (error) throw error
-  return data
+  if (!data) return null
+
+  // Comparer les 8 premiers caractères de l'UUID (en ignorant les tirets si présents)
+  const found = data.find(c => {
+    const prefix = c.id.replace(/-/g, '').slice(0, 8).toLowerCase()
+    return prefix === normalized
+  })
+
+  return found ?? null
 }
 
 export async function createCustomer(data: {

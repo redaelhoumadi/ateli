@@ -11,7 +11,7 @@ import {
 } from '@/components/ui'
 import type { Customer } from '@/types'
 
-const CODE_REGEX = /^[0-9A-Fa-f]{8}$/
+const CODE_REGEX = /^[0-9A-Fa-f]{8}$/i  // 8 hex chars, case-insensitive
 const TIER_ICONS: Record<string, string> = { bronze: '🥉', silver: '🥈', gold: '🥇', vip: '💜' }
 
 export function CustomerSelector() {
@@ -120,7 +120,7 @@ export function CustomerSelector() {
             type="text"
             placeholder="Nom, email, téléphone ou code client (ex. B51A3ECA)…"
             value={search}
-            onChange={(e) => { setSearch(e.target.value.toUpperCase()); setOpen(false) }}
+            onChange={(e) => { setSearch(e.target.value); setOpen(false) }}
             onFocus={() => { if (search.trim()) setOpen(true) }}
             className={cn(
               'w-full pl-9 pr-10 py-2.5 border rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all',
@@ -188,7 +188,7 @@ export function CustomerSelector() {
 
       {/* Create modal */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nouveau client</DialogTitle>
           </DialogHeader>
