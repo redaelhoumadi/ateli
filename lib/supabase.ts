@@ -300,6 +300,7 @@ export async function createSale(sale: {
   points_earned: number
   points_used: number
   payment_method: string
+  note?: string | null
   items: Array<{
     product_id: string
     quantity: number

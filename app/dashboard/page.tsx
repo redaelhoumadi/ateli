@@ -16,7 +16,7 @@ import {
 } from '@/components/ui'
 
 type SaleItem = { quantity:number; unit_price:number; total_price:number; product?:{name:string;brand?:{name:string}} }
-type Sale = { id:string; total:number; total_items:number; payment_method:string; created_at:string; customer?:{name:string}|null; seller?:{name:string}|null; items?:SaleItem[] }
+type Sale = { id:string; total:number; total_items:number; payment_method:string; created_at:string; note?:string|null; customer?:{name:string}|null; seller?:{name:string}|null; items?:SaleItem[] }
 type Brand = { id:string; name:string }
 
 const fmt      = (n:number) => n.toFixed(2)+' €'
@@ -75,6 +75,15 @@ function SaleModal({ sale, onClose }: { sale:Sale; onClose:()=>void }) {
               </div>
             )}
             {sale.seller && <p className="text-xs text-gray-400">Vendeur : <span className="font-semibold text-gray-700">{sale.seller.name}</span></p>}
+            {sale.note && (
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-start gap-2">
+                <span className="text-amber-500 shrink-0 mt-0.5">📝</span>
+                <div>
+                  <p className="text-xs font-bold text-amber-800 mb-0.5">Note</p>
+                  <p className="text-sm text-amber-900">{sale.note}</p>
+                </div>
+              </div>
+            )}
             {sale.items && sale.items.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Articles ({sale.total_items})</p>

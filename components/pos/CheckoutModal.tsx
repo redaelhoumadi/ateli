@@ -48,6 +48,7 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
         customer_id: customer?.id ?? null, seller_id: sellerId,
         total: tot, total_items: totalItems(),
         points_earned: 0, points_used: 0, payment_method: paymentMethod,
+        note: note.trim() || null,
         items: items.map(i => ({ product_id: i.product.id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.total_price })),
       })
       clearCart(); onSuccess(sale as Sale)
