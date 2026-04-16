@@ -25,6 +25,8 @@ export const supabase = (() => {
 })()
 
 // ─── Products ────────────────────────────────────────────────
+
+// Pour le catalogue POS — uniquement les produits actifs
 export async function getProducts(brandId?: string) {
   let query = supabase
     .from('products')
@@ -37,6 +39,17 @@ export async function getProducts(brandId?: string) {
   }
 
   const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+// Pour la page admin produits — tous les produits (actifs + archivés)
+export async function getAllProducts() {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, brand:brands(id, name)')
+    .order('name')
+
   if (error) throw error
   return data
 }

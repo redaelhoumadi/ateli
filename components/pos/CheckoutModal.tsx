@@ -58,6 +58,7 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl">
+        <DialogTitle className="sr-only">Encaissement</DialogTitle>
         {/* Dark header */}
         <div className="bg-gray-900 px-6 py-4 rounded-t-2xl flex items-center justify-between shrink-0">
           <div>

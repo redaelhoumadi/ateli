@@ -72,7 +72,7 @@ export default function ClientsPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-8xl mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -180,6 +180,7 @@ export default function ClientsPage() {
       <Dialog open={!!selected} onOpenChange={o => !o && setSelected(null)}>
         {selected && (
           <DialogContent className="max-w-md p-0 overflow-hidden">
+            <DialogTitle className="sr-only">Fiche client {selected?.name}</DialogTitle>
             <div className="px-6 py-5 flex items-start justify-between" style={{background:selected.tier.bg}}>
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl text-white font-black" style={{background:selected.tier.color}}>{selected.name[0]}</div>

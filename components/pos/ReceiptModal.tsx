@@ -2,7 +2,7 @@
 
 import { CheckCircle, Printer } from 'lucide-react'
 import {
-  Dialog, DialogContent, DialogFooter,
+  Dialog, DialogContent, DialogTitle, DialogFooter,
   Button, Badge, Separator,
 } from '@/components/ui'
 import type { Sale } from '@/types'
@@ -30,6 +30,7 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm overflow-hidden p-0">
+        <DialogTitle className="sr-only">Vente validée</DialogTitle>
         {/* Success banner */}
         <div className="bg-green-500 px-6 py-6 text-center rounded-t-2xl">
           <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center mx-auto mb-3">

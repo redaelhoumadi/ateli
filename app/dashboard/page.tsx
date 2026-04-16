@@ -55,6 +55,7 @@ function SaleModal({ sale, onClose }: { sale:Sale; onClose:()=>void }) {
   return (
     <Dialog open onOpenChange={o=>!o&&onClose()}>
       <DialogContent className="max-w-md p-0 overflow-hidden">
+        <DialogTitle className="sr-only">Détail de la vente du {date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</DialogTitle>
         <div className="bg-gray-900 px-6 py-4 rounded-t-2xl">
           <div className="flex items-start justify-between">
             <div>
@@ -198,7 +199,7 @@ export default function DashboardPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-8xl mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
 
           {/* Header */}
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -242,7 +243,7 @@ export default function DashboardPage() {
               )}
 
               {/* Brand filter */}
-              <Select value={filterBrand} onValueChange={setFilterBrand}>
+              <Select onValueChange={v => setFilterBrand(v === 'all' ? '' : v)} value={filterBrand || 'all'}>
                 <SelectTrigger className="w-44 h-9"><SelectValue placeholder="Toutes marques"/></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les marques</SelectItem>
@@ -251,7 +252,7 @@ export default function DashboardPage() {
               </Select>
 
               {/* Payment filter */}
-              <Select value={filterPayment} onValueChange={setFilterPayment}>
+              <Select onValueChange={v => setFilterPayment(v === 'all' ? '' : v)} value={filterPayment || 'all'}>
                 <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Tous paiements"/></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous paiements</SelectItem>

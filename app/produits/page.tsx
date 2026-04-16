@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Search, Plus, Tag, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon } from 'lucide-react'
 import {
-  getProducts, getBrands, createProduct, updateProduct,
+  getAllProducts, getBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
   uploadProductImage, deleteProductImage,
 } from '@/lib/supabase'
@@ -53,7 +53,7 @@ export default function ProduitsPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, b] = await Promise.all([getProducts(), getBrands()])
+      const [p, b] = await Promise.all([getAllProducts(), getBrands()])
       setProducts((p as Product[]) || [])
       setBrands((b as Brand[]) || [])
     } finally { setLoading(false) }
@@ -66,7 +66,9 @@ export default function ProduitsPage() {
         || p.reference.toLowerCase().includes(search.toLowerCase())
         || p.brand?.name?.toLowerCase().includes(search.toLowerCase())
       const mb = !filterBrand || p.brand_id === filterBrand
-      const ma = showArchived ? (p as any).is_active === false : (p as any).is_active !== false
+      // is_active: true = actif, false = archivé, null/undefined = actif (anciens enregistrements)
+      const isArchived = (p as any).is_active === false
+      const ma = showArchived ? isArchived : !isArchived
       return ms && mb && ma
     })
     list = [...list].sort((a, b) => {
@@ -84,10 +86,11 @@ export default function ProduitsPage() {
   const pageStart  = filtered.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const pageEnd    = Math.min(currentPage * pageSize, filtered.length)
 
-  const activeCount   = products.filter(p => (p as any).is_active !== false).length
+  const isActive      = (p: Product) => (p as any).is_active !== false  // true or null = active
+  const activeCount   = products.filter(isActive).length
   const archivedCount = products.filter(p => (p as any).is_active === false).length
-  const avgPrice      = activeCount ? products.filter(p => (p as any).is_active !== false).reduce((s,p) => s + p.price, 0) / activeCount : 0
-  const withDiscount  = products.filter(p => p.discount && p.discount > 0 && (p as any).is_active !== false).length
+  const avgPrice      = activeCount ? products.filter(isActive).reduce((s,p) => s + p.price, 0) / activeCount : 0
+  const withDiscount  = products.filter(p => p.discount && p.discount > 0 && isActive(p)).length
   const finalPrice    = (p: Product) => p.discount ? p.price * (1 - p.discount / 100) : p.price
 
   // Selection
@@ -234,7 +237,7 @@ export default function ProduitsPage() {
           {/* Filters */}
           <div className="flex flex-wrap gap-2 sm:gap-3">
             <Input icon={<Search size={14}/>} placeholder="Nom, référence ou marque…" value={search} onChange={e => setSearch(e.target.value)} className="flex-1"/>
-            <Select value={filterBrand} onValueChange={setFilterBrand}>
+            <Select onValueChange={v => setFilterBrand(v === 'all' ? '' : v)} value={filterBrand || 'all'}>
               <SelectTrigger className="w-48"><SelectValue placeholder="Toutes les marques"/></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes les marques</SelectItem>
@@ -320,7 +323,7 @@ export default function ProduitsPage() {
                     </td></tr>
                   ) : paginated.map(p => {
                     const isSel = selected.has(p.id)
-                    const isArc = (p as any).is_active === false
+                    const isArc = (p as any).is_active === false  // strictly false = archived
                     const img   = (p as any).image_url as string|null
                     return (
                       <tr key={p.id} onClick={() => toggleOne(p.id)}
@@ -421,8 +424,10 @@ export default function ProduitsPage() {
                         if (currentPage < totalPages-2) pages.push('…')
                         pages.push(totalPages)
                       }
-                      return pages.map((pg,i) => pg === '…' ? <span key={i} className="w-7 h-7 flex items-center justify-center text-xs text-gray-400">…</span> : (
-                        <button key={`${pg}-${i}`} onClick={() => setCurrentPage(pg as number)}
+                      return pages.map((pg, i) => pg === '…' ? (
+                        <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center text-xs text-gray-400">…</span>
+                      ) : (
+                        <button key={`page-${pg}`} onClick={() => setCurrentPage(pg as number)}
                           className={cn('w-7 h-7 flex items-center justify-center rounded-lg text-xs font-medium transition-all', currentPage === pg ? 'bg-gray-900 text-white' : 'border border-gray-200 text-gray-600 hover:border-gray-400')}>
                           {pg}
                         </button>
