@@ -82,6 +82,258 @@ export async function getBrands() {
   return data
 }
 
+export async function updateBrandSettings(id: string, data: {
+  commission_rate?: number | null
+  contact_name?:   string | null
+  contact_email?:  string | null
+  contact_phone?:  string | null
+  iban?:           string | null
+  notes?:          string | null
+}) {
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return brand
+}
+
+// ─── Reversements ─────────────────────────────────────────────
+
+export async function getReversements(brandId?: string) {
+  let query = supabase
+    .from('reversements')
+    .select('*, brand:brands(id, name, commission_rate, contact_name, contact_email, iban)')
+    .order('created_at', { ascending: false })
+
+  if (brandId) query = query.eq('brand_id', brandId)
+
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export async function createReversement(data: {
+  brand_id:      string
+  period_from:   string
+  period_to:     string
+  gross_revenue: number
+  commission:    number
+  net_amount:    number
+  notes?:        string | null
+}) {
+  const { data: rev, error } = await supabase
+    .from('reversements')
+    .insert([{ ...data, status: 'pending' }])
+    .select()
+    .single()
+
+  if (error) throw error
+  return rev
+}
+
+export async function markReversementPaid(id: string, paidBy?: string) {
+  const { data, error } = await supabase
+    .from('reversements')
+    .update({ status: 'paid', paid_at: new Date().toISOString(), paid_by: paidBy ?? null })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteReversement(id: string) {
+  const { error } = await supabase.from('reversements').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function getBrandStats(dateFrom?: string, dateTo?: string) {
+  // Load all sales with brand info in given period
+  let query = supabase
+    .from('sales')
+    .select('id, total, created_at, items:sale_items(quantity, unit_price, total_price, product:products(name, brand_id, brand:brands(id, name, commission_rate)))')
+    .order('created_at', { ascending: false })
+
+  if (dateFrom) query = query.gte('created_at', dateFrom)
+  if (dateTo)   query = query.lte('created_at', dateTo)
+
+  const { data: sales, error } = await query
+  if (error) throw error
+
+  // Load brands
+  const { data: brands, error: bError } = await supabase
+    .from('brands')
+    .select('*')
+    .order('name')
+
+  if (bError) throw bError
+
+  // Aggregate per brand
+  const statsMap = new Map<string, {
+    brand: any
+    gross: number; commission: number; net: number
+    items: number; sales: Set<string>
+    products: Map<string, { qty: number; revenue: number }>
+  }>()
+
+  ;(brands || []).forEach(b => {
+    statsMap.set(b.id, {
+      brand: b,
+      gross: 0, commission: 0, net: 0,
+      items: 0, sales: new Set(),
+      products: new Map(),
+    })
+  })
+
+  ;(sales || []).forEach((sale: any) => {
+    ;(sale.items || []).forEach((item: any) => {
+      const brand = item.product?.brand
+      if (!brand) return
+      const s = statsMap.get(brand.id)
+      if (!s) return
+
+      const commRate = (brand.commission_rate ?? 30) / 100
+      const itemGross = item.total_price
+      const itemComm  = itemGross * commRate
+      const itemNet   = itemGross - itemComm
+
+      s.gross += itemGross
+      s.commission += itemComm
+      s.net += itemNet
+      s.items += item.quantity
+      s.sales.add(sale.id)
+
+      const prodName = item.product?.name || '—'
+      const existing = s.products.get(prodName) || { qty: 0, revenue: 0 }
+      existing.qty += item.quantity
+      existing.revenue += itemGross
+      s.products.set(prodName, existing)
+    })
+  })
+
+  return Array.from(statsMap.values())
+    .filter(s => s.gross > 0 || true)
+    .map(s => ({
+      brand: s.brand,
+      gross_revenue: Math.round(s.gross * 100) / 100,
+      commission_amount: Math.round(s.commission * 100) / 100,
+      net_to_pay: Math.round(s.net * 100) / 100,
+      items_sold: s.items,
+      sales_count: s.sales.size,
+      top_products: Array.from(s.products.entries())
+        .map(([name, d]) => ({ name, ...d }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5),
+    }))
+    .sort((a, b) => b.gross_revenue - a.gross_revenue)
+}
+
+// ─── Brand fiche complète ─────────────────────────────────────
+
+export async function getBrandById(id: string) {
+  const { data, error } = await supabase
+    .from('brands')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateBrandFull(id: string, data: Partial<{
+  name:            string
+  description:     string | null
+  logo_url:        string | null
+  website:         string | null
+  instagram:       string | null
+  category:        string | null
+  join_date:       string | null
+  contract_end:    string | null
+  is_active:       boolean
+  commission_rate: number | null
+  contact_name:    string | null
+  contact_email:   string | null
+  contact_phone:   string | null
+  iban:            string | null
+  notes:           string | null
+}>) {
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return brand
+}
+
+export async function getBrandSalesHistory(brandId: string, months = 6) {
+  // Get monthly revenue for a specific brand over the last N months
+  const from = new Date()
+  from.setMonth(from.getMonth() - months)
+
+  const { data, error } = await supabase
+    .from('sales')
+    .select('created_at, total, items:sale_items(total_price, product:products(brand_id))')
+    .gte('created_at', from.toISOString())
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+
+  // Aggregate by month for this brand
+  const monthly = new Map<string, number>()
+  ;(data || []).forEach((sale: any) => {
+    const hasBrand = (sale.items || []).some((i: any) => i.product?.brand_id === brandId)
+    if (!hasBrand) return
+    const key = sale.created_at.slice(0, 7) // YYYY-MM
+    const brandRevenue = (sale.items || [])
+      .filter((i: any) => i.product?.brand_id === brandId)
+      .reduce((s: number, i: any) => s + i.total_price, 0)
+    monthly.set(key, (monthly.get(key) || 0) + brandRevenue)
+  })
+
+  // Fill missing months with 0
+  const result = []
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date()
+    d.setMonth(d.getMonth() - i)
+    const key = d.toISOString().slice(0, 7)
+    result.push({
+      month: d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
+      key,
+      revenue: Math.round((monthly.get(key) || 0) * 100) / 100,
+    })
+  }
+  return result
+}
+
+export async function getProductsByBrand(brandId: string) {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('brand_id', brandId)
+    .order('name')
+  if (error) throw error
+  return data
+}
+
+export async function uploadBrandLogo(brandId: string, file: File): Promise<string> {
+  const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+  const path = `brand-logos/${brandId}.${ext}`
+  const { error } = await supabase.storage
+    .from('product-images')
+    .upload(path, file, { upsert: true, contentType: file.type })
+  if (error) throw error
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  return `${url}/storage/v1/object/public/product-images/${path}`
+}
+
+
 export async function createBrand(name: string) {
   const { data, error } = await supabase
     .from('brands')
@@ -363,6 +615,188 @@ export async function getSalesStats(dateFrom?: string, dateTo?: string) {
   if (error) throw error
   return data
 }
+
+
+// ─── Today's sales (for POS history panel) ───────────────────
+export async function getTodaySales(sellerId?: string) {
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+
+  let query = supabase
+    .from('sales')
+    .select('*, customer:customers(name), seller:sellers(name), items:sale_items(*, product:products(name, brand:brands(name)))')
+    .gte('created_at', todayStart.toISOString())
+    .order('created_at', { ascending: false })
+
+  if (sellerId) query = query.eq('seller_id', sellerId)
+
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export async function cancelSale(saleId: string) {
+  // Delete sale items first (cascade should handle it, but explicit is safer)
+  const { error: itemsError } = await supabase
+    .from('sale_items')
+    .delete()
+    .eq('sale_id', saleId)
+
+  if (itemsError) throw itemsError
+
+  const { error } = await supabase
+    .from('sales')
+    .delete()
+    .eq('id', saleId)
+
+  if (error) throw error
+}
+
+// ─── Clôtures de caisse ───────────────────────────────────────
+
+export async function getClotures(limit = 30) {
+  const { data, error } = await supabase
+    .from('clotures')
+    .select('*')
+    .order('date', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data
+}
+
+export async function getCloturByDate(date: string) {
+  const { data, error } = await supabase
+    .from('clotures')
+    .select('*')
+    .eq('date', date)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function createCloture(data: {
+  date: string
+  opened_by?: string | null
+  closed_by?: string | null
+  total_card: number
+  total_cash: number
+  total_mixed: number
+  total_revenue: number
+  sales_count: number
+  items_count: number
+  customers_with_account: number
+  fund_opening?: number | null
+  fund_closing?: number | null
+  fund_expected?: number | null
+  fund_gap?: number | null
+  notes?: string | null
+}) {
+  const { data: cloture, error } = await supabase
+    .from('clotures')
+    .upsert([{ ...data, closed_at: new Date().toISOString() }], { onConflict: 'date' })
+    .select()
+    .single()
+  if (error) throw error
+  return cloture
+}
+
+export async function getSalesByDate(date: string) {
+  const dayStart = new Date(date + 'T00:00:00').toISOString()
+  const dayEnd   = new Date(date + 'T23:59:59').toISOString()
+
+  const { data, error } = await supabase
+    .from('sales')
+    .select('*, customer:customers(name), seller:sellers(name), items:sale_items(quantity, unit_price, total_price, product:products(name, brand:brands(name)))')
+    .gte('created_at', dayStart)
+    .lte('created_at', dayEnd)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+
+// ─── Settings ─────────────────────────────────────────────────
+
+export async function getSettings(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.from('settings').select('key, value')
+  if (error) throw error
+  return Object.fromEntries((data || []).map(r => [r.key, r.value]))
+}
+
+export async function updateSettings(updates: Record<string, string>) {
+  const rows = Object.entries(updates).map(([key, value]) => ({
+    key, value, updated_at: new Date().toISOString(),
+  }))
+  const { error } = await supabase
+    .from('settings')
+    .upsert(rows, { onConflict: 'key' })
+  if (error) throw error
+}
+
+// ─── Sellers CRUD ─────────────────────────────────────────────
+
+// ─── Auth par PIN ─────────────────────────────────────────────
+
+export async function getSellersForLogin() {
+  // Charge tous les vendeurs actifs avec leur PIN (pour l'écran de connexion)
+  const { data, error } = await supabase
+    .from('sellers')
+    .select('id, name, role, pin, is_active')
+    .eq('is_active', true)
+    .order('name')
+  if (error) throw error
+  return data
+}
+
+export async function updateSellerPin(id: string, pin: string | null) {
+  const { data, error } = await supabase
+    .from('sellers')
+    .update({ pin, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+
+export async function getAllSellers() {
+  const { data, error } = await supabase
+    .from('sellers')
+    .select('*')
+    .order('name')
+  if (error) throw error
+  return data
+}
+
+export async function createSeller(data: {
+  name: string; email?: string | null; phone?: string | null; role?: string
+}) {
+  const { data: seller, error } = await supabase
+    .from('sellers')
+    .insert([{ ...data, is_active: true, role: data.role || 'seller' }])
+    .select().single()
+  if (error) throw error
+  return seller
+}
+
+export async function updateSeller(id: string, data: {
+  name?: string; email?: string | null; phone?: string | null
+  role?: string; is_active?: boolean
+}) {
+  const { data: seller, error } = await supabase
+    .from('sellers').update({ ...data, updated_at: new Date().toISOString() })
+    .eq('id', id).select().single()
+  if (error) throw error
+  return seller
+}
+
+export async function deleteSeller(id: string) {
+  const { error } = await supabase.from('sellers').delete().eq('id', id)
+  if (error) throw error
+}
+
 
 export async function getSellers() {
   const { data, error } = await supabase
