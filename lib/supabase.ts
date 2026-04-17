@@ -235,6 +235,108 @@ export async function getBrandStats(dateFrom?: string, dateTo?: string) {
 
 // ─── Brand fiche complète ─────────────────────────────────────
 
+// ─── Portail créateur (read-only via token) ───────────────────
+
+export async function getBrandByToken(token: string) {
+  const { data, error } = await supabase
+    .from('brands')
+    .select('*')
+    .eq('portal_token', token)
+    .single()
+  if (error) return null
+  return data
+}
+
+export async function generatePortalToken(brandId: string) {
+  // Génère un token aléatoire sécurisé (48 hex chars)
+  const array = new Uint8Array(24)
+  crypto.getRandomValues(array)
+  const token = Array.from(array).map(b => b.toString(16).padStart(2,'0')).join('')
+
+  const { data, error } = await supabase
+    .from('brands')
+    .update({ portal_token: token })
+    .eq('id', brandId)
+    .select()
+    .single()
+  if (error) throw error
+  return token
+}
+
+export async function getPortalStats(brandId: string) {
+  // Tout le CA de la marque + breakdown par mois
+  const { data: salesData, error } = await supabase
+    .from('sales')
+    .select('id, created_at, items:sale_items(quantity, total_price, unit_price, product:products(id, name, brand_id))')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+
+  const sales = (salesData || []).filter((s: any) =>
+    (s.items || []).some((i: any) => i.product?.brand_id === brandId)
+  )
+
+  let grossTotal = 0, itemsTotal = 0
+  const byMonth  = new Map<string, number>()
+  const byProduct = new Map<string, { name: string; qty: number; revenue: number }>()
+  const recentSales: { date: string; items: { name: string; qty: number; price: number }[]; total: number }[] = []
+
+  sales.forEach((sale: any) => {
+    const brandItems = (sale.items || []).filter((i: any) => i.product?.brand_id === brandId)
+    if (!brandItems.length) return
+
+    const saleRevenue = brandItems.reduce((s: number, i: any) => s + i.total_price, 0)
+    grossTotal  += saleRevenue
+    itemsTotal  += brandItems.reduce((s: number, i: any) => s + i.quantity, 0)
+
+    const monthKey = sale.created_at.slice(0, 7)
+    byMonth.set(monthKey, (byMonth.get(monthKey) || 0) + saleRevenue)
+
+    brandItems.forEach((i: any) => {
+      const existing = byProduct.get(i.product.id) || { name: i.product.name, qty: 0, revenue: 0 }
+      existing.qty     += i.quantity
+      existing.revenue += i.total_price
+      byProduct.set(i.product.id, existing)
+    })
+
+    if (recentSales.length < 20) {
+      recentSales.push({
+        date:  sale.created_at,
+        total: saleRevenue,
+        items: brandItems.map((i: any) => ({
+          name:  i.product.name,
+          qty:   i.quantity,
+          price: i.total_price,
+        })),
+      })
+    }
+  })
+
+  // Monthly chart — last 6 months
+  const monthlyChart = []
+  for (let i = 5; i >= 0; i--) {
+    const d   = new Date()
+    d.setMonth(d.getMonth() - i)
+    const key = d.toISOString().slice(0, 7)
+    monthlyChart.push({
+      month:   d.toLocaleDateString('fr-FR', { month: 'short' }),
+      fullKey: key,
+      revenue: Math.round((byMonth.get(key) || 0) * 100) / 100,
+    })
+  }
+
+  return {
+    gross:       Math.round(grossTotal * 100) / 100,
+    items:       itemsTotal,
+    salesCount:  sales.length,
+    avgTicket:   sales.length ? Math.round((grossTotal / sales.length) * 100) / 100 : 0,
+    monthlyChart,
+    topProducts: Array.from(byProduct.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 8),
+    recentSales,
+  }
+}
+
+
 export async function getBrandById(id: string) {
   const { data, error } = await supabase
     .from('brands')

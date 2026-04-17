@@ -16,6 +16,7 @@ export type Brand = {
   join_date:       string | null
   contract_end:    string | null
   is_active:       boolean
+  portal_token:    string | null
   created_at: string
 }
 

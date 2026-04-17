@@ -8,12 +8,12 @@ import {
   ArrowLeft, Globe, Instagram, Mail, Phone, MapPin, Save,
   Package, TrendingUp, Wallet, ShoppingCart, CheckCircle,
   ExternalLink, Pencil, Image as ImageIcon, Calendar, Tag,
-  AlertTriangle, ToggleRight, ToggleLeft, Archive,
+  AlertTriangle, ToggleRight, ToggleLeft, Archive, Link, Copy, RefreshCw,
 } from 'lucide-react'
 import {
   getBrandById, updateBrandFull, getBrandSalesHistory,
   getProductsByBrand, getBrandStats, getReversements,
-  uploadBrandLogo,
+  uploadBrandLogo, generatePortalToken,
 } from '@/lib/supabase'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
@@ -137,6 +137,29 @@ export default function BrandDetailPage() {
   }, [brandId])
 
   useEffect(() => { load() }, [load])
+
+  const [generatingToken, setGeneratingToken] = useState(false)
+  const [tokenCopied, setTokenCopied]         = useState(false)
+
+  const portalUrl = brand
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/createur/${brand.portal_token}`
+    : ''
+
+  const handleGenerateToken = async () => {
+    if (!confirm("Générer un nouveau lien ? L'ancien sera révoqué.")) return
+    setGeneratingToken(true)
+    try {
+      const token = await generatePortalToken(brandId)
+      setBrand(prev => prev ? { ...prev, portal_token: token } : prev)
+    } catch (e: any) { alert(e.message) }
+    finally { setGeneratingToken(false) }
+  }
+
+  const handleCopyUrl = () => {
+    navigator.clipboard.writeText(portalUrl)
+    setTokenCopied(true)
+    setTimeout(() => setTokenCopied(false), 2000)
+  }
 
   const handleSave = async () => {
     setSaving(true); setSaved(false)
@@ -445,6 +468,49 @@ export default function BrandDetailPage() {
                       placeholder="Conditions particulières, délais, remarques…"
                       className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"/>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Portail créateur */}
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Link size={16}/> Portail créateur
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-gray-500">
+                    Partagez ce lien unique avec le créateur pour lui donner accès à ses stats en lecture seule — sans accès au back-office.
+                  </p>
+                  {brand?.portal_token ? (
+                    <div className="space-y-3">
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center gap-3">
+                        <p className="text-xs font-mono text-gray-600 flex-1 truncate">{portalUrl}</p>
+                        <button onClick={handleCopyUrl}
+                          className={cn('shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all',
+                            tokenCopied ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400')}>
+                          {tokenCopied ? <><CheckCircle size={12}/> Copié</> : <><Copy size={12}/> Copier</>}
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" asChild className="gap-1.5">
+                          <a href={portalUrl} target="_blank" rel="noopener"><ExternalLink size={13}/> Aperçu</a>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={handleGenerateToken} disabled={generatingToken}
+                          className="gap-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50">
+                          {generatingToken ? <Spinner size="sm"/> : <><RefreshCw size={13}/> Regénérer le lien</>}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-400">Lecture seule : CA, produits, ventes, reversements.</p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 space-y-3">
+                      <p className="text-xs text-gray-400">Aucun lien généré pour cette marque.</p>
+                      <Button size="sm" onClick={handleGenerateToken} disabled={generatingToken} className="gap-2">
+                        {generatingToken ? <Spinner size="sm"/> : <><Link size={13}/> Générer le lien portail</>}
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
