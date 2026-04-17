@@ -545,6 +545,82 @@ export async function restoreProduct(id: string) {
 }
 
 
+// ─── Stock ───────────────────────────────────────────────────
+
+export async function updateStock(productId: string, stock: number | null) {
+  const { data, error } = await supabase
+    .from('products')
+    .update({ stock })
+    .eq('id', productId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateStockMin(productId: string, stockMin: number) {
+  const { data, error } = await supabase
+    .from('products')
+    .update({ stock_min: stockMin })
+    .eq('id', productId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getLowStockProducts() {
+  // Produits actifs avec stock défini et stock <= stock_min
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, brand:brands(id, name)')
+    .not('stock', 'is', null)
+    .neq('is_active', false)
+    .order('stock', { ascending: true })
+  if (error) throw error
+  // Filter client-side since Supabase can't do column comparisons directly
+  return (data || []).filter((p: any) => p.stock <= (p.stock_min ?? 3))
+}
+
+export async function checkStockAvailability(items: Array<{ product_id: string; quantity: number }>) {
+  // Returns list of products with insufficient stock
+  const ids = items.map(i => i.product_id)
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, stock, stock_min')
+    .in('id', ids)
+    .not('stock', 'is', null)
+  if (error) throw error
+
+  const insufficient: { name: string; available: number; requested: number }[] = []
+  ;(data || []).forEach((p: any) => {
+    const item = items.find(i => i.product_id === p.id)
+    if (item && p.stock < item.quantity) {
+      insufficient.push({ name: p.name, available: p.stock, requested: item.quantity })
+    }
+  })
+  return insufficient
+}
+
+export async function getStockStats() {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, brand:brands(id, name)')
+    .neq('is_active', false)
+    .not('stock', 'is', null)
+    .order('stock', { ascending: true })
+  if (error) throw error
+
+  const products = (data || []) as any[]
+  const out      = products.filter(p => p.stock === 0)
+  const low      = products.filter(p => p.stock > 0 && p.stock <= (p.stock_min ?? 3))
+  const ok       = products.filter(p => p.stock > (p.stock_min ?? 3))
+  const totalVal = products.reduce((s: number, p: any) => s + (p.stock ?? 0) * p.price, 0)
+
+  return { all: products, out, low, ok, totalVal }
+}
+
+
 // ─── Product images (Supabase Storage) ───────────────────────
 const BUCKET = 'product-images'
 
@@ -738,7 +814,9 @@ export async function getTodaySales(sellerId?: string) {
 }
 
 export async function cancelSale(saleId: string) {
-  // Delete sale items first (cascade should handle it, but explicit is safer)
+  // The DB trigger trg_restore_stock will automatically re-increment
+  // stock when sale_items rows are deleted.
+  // Delete sale items first
   const { error: itemsError } = await supabase
     .from('sale_items')
     .delete()

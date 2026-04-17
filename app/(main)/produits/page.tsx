@@ -3,11 +3,11 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Search, Plus, Tag, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon } from 'lucide-react'
+import { Search, Plus, Tag, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle } from 'lucide-react'
 import {
   getAllProducts, getBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
-  uploadProductImage, deleteProductImage,
+  uploadProductImage, deleteProductImage, updateStock,
 } from '@/lib/supabase'
 import { ProductImageUpload } from '@/components/ui/ProductImageUpload'
 import {
@@ -17,13 +17,15 @@ import {
   Tooltip, TooltipTrigger, TooltipContent, TooltipProvider,
   Checkbox, Spinner, StatCard, EmptyState, cn,
 } from '@/components/ui'
+import { getStockStatus } from '@/types'
 import type { Product, Brand } from '@/types'
 
 type ProductForm = {
   name: string; reference: string; price: string
   discount: string; brand_id: string; image_url: string | null
+  stock: string; stock_min: string
 }
-const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null }
+const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null, stock: '', stock_min: '3' }
 
 export default function ProduitsPage() {
   const [products, setProducts]     = useState<Product[]>([])
@@ -129,9 +131,16 @@ export default function ProduitsPage() {
 
   // CRUD
   const openAdd  = () => { setForm({ ...emptyForm, brand_id: brands[0]?.id || '' }); setError(''); setModal('add') }
-  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null }); setError(''); setModal('edit') }
+  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3' }); setError(''); setModal('edit') }
   const openDelete = (p: Product) => { setDeleteTarget(p); setDeleteMode(null); setError(''); setModal('delete') }
   const closeModal = () => { setModal(null); setEditTarget(null); setDeleteTarget(null); setError('') }
+
+  const handleInlineStock = async (p: Product, newStock: number | null) => {
+    try {
+      const updated = await updateStock(p.id, newStock)
+      setProducts(prev => prev.map(pr => pr.id === p.id ? { ...pr, stock: (updated as any).stock } : pr))
+    } catch (e: any) { alert(e.message) }
+  }
 
   const handleSave = async () => {
     if (!form.name.trim()) return setError('Le nom est obligatoire')
@@ -142,7 +151,8 @@ export default function ProduitsPage() {
     if (disc != null && (disc < 0 || disc > 100)) return setError('Remise entre 0 et 100 %')
     setSaving(true); setError('')
     try {
-      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url }
+      const stockVal = form.stock !== '' && !isNaN(Number(form.stock)) ? Number(form.stock) : null
+      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url, stock: stockVal, stock_min: form.stock_min !== '' ? Number(form.stock_min) : 3 }
       if (modal === 'add') {
         const created = await createProduct(payload)
         setProducts(prev => [...prev, created as Product].sort((a,b) => a.name.localeCompare(b.name)))
@@ -307,6 +317,7 @@ export default function ProduitsPage() {
                     <th className="text-right px-4 py-3.5"><SortBtn col="price" label="Prix"/></th>
                     <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Remise</th>
                     <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Prix final</th>
+                    <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Stock</th>
                     <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
@@ -358,6 +369,31 @@ export default function ProduitsPage() {
                         </td>
                         <td className="px-4 py-3.5 text-right">
                           <span className="text-sm font-bold text-gray-900">{finalPrice(p).toFixed(2)} €</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right" onClick={e => e.stopPropagation()}>
+                          {(() => {
+                            const status = getStockStatus(p)
+                            if (p.stock === null || p.stock === undefined) return (
+                              <button onClick={() => handleInlineStock(p, 0)}
+                                className="text-xs text-gray-300 hover:text-gray-500 transition-colors">
+                                + Activer
+                              </button>
+                            )
+                            return (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button onClick={() => { const v = Math.max(0, (p.stock ?? 0) - 1); handleInlineStock(p, v) }}
+                                  className="w-5 h-5 rounded border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 text-xs font-bold">−</button>
+                                <span className={cn('text-sm font-bold min-w-[24px] text-center',
+                                  status === 'out' ? 'text-red-500' : status === 'low' ? 'text-amber-500' : 'text-gray-900')}>
+                                  {p.stock}
+                                </span>
+                                <button onClick={() => handleInlineStock(p, (p.stock ?? 0) + 1)}
+                                  className="w-5 h-5 rounded border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 text-xs font-bold">+</button>
+                                {status === 'out' && <span className="text-[10px] text-red-400 font-semibold">Épuisé</span>}
+                                {status === 'low' && <span className="text-[10px] text-amber-400 font-semibold">Bas</span>}
+                              </div>
+                            )
+                          })()}
                         </td>
                         <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -482,6 +518,37 @@ export default function ProduitsPage() {
                   </div>
                 </div>
               )}
+              {/* Stock */}
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Package size={14} className="text-gray-500"/>
+                  <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Gestion du stock</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Stock actuel</Label>
+                    <Input type="number" placeholder="ex. 12 (vide = non géré)" min="0" value={form.stock}
+                      onChange={e => setForm({...form, stock: e.target.value})}/>
+                    <p className="text-xs text-gray-400 mt-1">Laissez vide pour ne pas gérer le stock</p>
+                  </div>
+                  <div>
+                    <Label>Seuil d'alerte</Label>
+                    <Input type="number" placeholder="3" min="0" value={form.stock_min}
+                      onChange={e => setForm({...form, stock_min: e.target.value})}/>
+                    <p className="text-xs text-gray-400 mt-1">Alerte "stock bas" sous ce seuil</p>
+                  </div>
+                </div>
+                {form.stock !== '' && (
+                  <div className={cn('rounded-lg px-3 py-2 text-xs font-medium',
+                    Number(form.stock) === 0 ? 'bg-red-50 text-red-600' :
+                    Number(form.stock) <= Number(form.stock_min || 3) ? 'bg-amber-50 text-amber-600' :
+                    'bg-green-50 text-green-600')}>
+                    {Number(form.stock) === 0 ? '🔴 Épuisé — non affiché en caisse' :
+                     Number(form.stock) <= Number(form.stock_min || 3) ? `🟠 Stock bas — badge affiché en caisse (${form.stock} restant${Number(form.stock) > 1 ? 's' : ''})` :
+                     `🟢 En stock (${form.stock} unité${Number(form.stock) > 1 ? 's' : ''})`}
+                  </div>
+                )}
+              </div>
               <ProductImageUpload currentUrl={form.image_url} onUpload={handleImageUpload} onRemove={handleImageRemove} uploading={imageUploading}/>
               {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2.5 rounded-xl">{error}</p>}
             </div>

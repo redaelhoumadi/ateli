@@ -55,8 +55,19 @@ export type Product = {
   brand_id: string
   image_url: string | null
   is_active: boolean
+  stock:      number | null   // null = stock non géré
+  stock_min:  number | null   // seuil d'alerte (défaut 3)
   created_at: string
   brand?: Brand
+}
+
+export type StockStatus = 'ok' | 'low' | 'out' | 'unmanaged'
+
+export function getStockStatus(product: Product): StockStatus {
+  if (product.stock === null || product.stock === undefined) return 'unmanaged'
+  if (product.stock === 0) return 'out'
+  if (product.stock <= (product.stock_min ?? 3)) return 'low'
+  return 'ok'
 }
 
 export type Customer = {

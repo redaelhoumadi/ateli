@@ -5,6 +5,7 @@ import { Search } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
 import { getProducts, getBrands, searchProducts } from '@/lib/supabase'
 import { Input, Badge, Spinner, cn } from '@/components/ui'
+import { getStockStatus } from '@/types'
 import type { Product, Brand } from '@/types'
 
 export function ProductCatalog() {
@@ -79,8 +80,17 @@ export function ProductCatalog() {
               return (
                 <button
                   key={p.id}
-                  onClick={() => addItem(p)}
-                  className="group bg-white rounded-2xl border border-gray-100 text-left hover:border-gray-300 hover:shadow-md transition-all active:scale-[0.98] overflow-hidden flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                  onClick={() => {
+                    const status = getStockStatus(p)
+                    if (status === 'out') return
+                    addItem(p)
+                  }}
+                  className={cn(
+                    "group bg-white rounded-2xl border text-left transition-all overflow-hidden flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900",
+                    getStockStatus(p) === 'out'
+                      ? "border-red-100 opacity-70 cursor-not-allowed"
+                      : "border-gray-100 hover:border-gray-300 hover:shadow-md active:scale-[0.98] cursor-pointer"
+                  )}
                 >
                   {/* Photo */}
                   <div className="w-full aspect-square bg-gray-50 overflow-hidden relative">
@@ -92,10 +102,24 @@ export function ProductCatalog() {
                         <Package size={32} className="text-gray-200" />
                       </div>
                     )}
+                    {/* Discount badge */}
                     {p.discount && (
                       <Badge variant="destructive" className="absolute top-2 right-2 shadow-sm">
                         -{p.discount}%
                       </Badge>
+                    )}
+                    {/* Stock badges */}
+                    {getStockStatus(p) === 'out' && (
+                      <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                        <span className="bg-red-500 text-white text-xs font-black px-3 py-1.5 rounded-full shadow-sm">
+                          Épuisé
+                        </span>
+                      </div>
+                    )}
+                    {getStockStatus(p) === 'low' && (
+                      <span className="absolute top-2 left-2 bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-sm">
+                        {p.stock} restant{p.stock! > 1 ? 's' : ''}
+                      </span>
                     )}
                   </div>
 

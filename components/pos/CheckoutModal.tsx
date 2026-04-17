@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { CreditCard, Banknote, Shuffle, X } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
-import { createSale } from '@/lib/supabase'
+import { createSale, checkStockAvailability } from '@/lib/supabase'
 import { getTierForSpend } from '@/lib/customerPortal'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -72,6 +72,18 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
     if (!sellerId) { setError('Sélectionnez un vendeur'); return }
     setLoading(true); setError('')
     try {
+      // Vérifier le stock avant d'encaisser
+      const stockIssues = await checkStockAvailability(
+        items.map(i => ({ product_id: i.product.id, quantity: i.quantity }))
+      )
+      if (stockIssues.length > 0) {
+        const msg = stockIssues.map(s =>
+          `• ${s.name} : ${s.available} en stock, ${s.requested} demandé${s.requested > 1 ? 's' : ''}`
+        ).join('\n')
+        setError(`Stock insuffisant :\n${msg}`)
+        setLoading(false)
+        return
+      }
       const sale = await createSale({
         customer_id: customer?.id ?? null, seller_id: sellerId,
         total: tot, total_items: totalItems(),

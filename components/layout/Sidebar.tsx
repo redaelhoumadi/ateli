@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import {
   Monitor, Package, Users, Calendar, BarChart2, QrCode, X, Menu,
-  ShoppingCart, ChevronRight, Wallet, Lock, Settings, LogOut, Layers,
+  ShoppingCart, ChevronRight, Wallet, Lock, Settings, LogOut, Layers, Boxes,
 } from 'lucide-react'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
