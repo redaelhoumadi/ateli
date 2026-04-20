@@ -46,17 +46,41 @@ function HBar({ label, value, max, color }: { label:string; value:number; max:nu
 
 function SaleModal({ sale, onClose }: { sale:Sale; onClose:()=>void }) {
   const date = new Date(sale.created_at)
+
+  // Sous-total brut global (sum unit_price × qty)
+  const subtotalBrut = useMemo(() =>
+    (sale.items||[]).reduce((s, i) => s + i.unit_price * i.quantity, 0)
+  , [sale])
+
+  // Remise globale = différence entre brut et total encaissé
+  const totalDiscount = Math.round((subtotalBrut - sale.total) * 100) / 100
+  const hasDiscount   = totalDiscount > 0.005
+  const discountRate  = subtotalBrut > 0 ? sale.total / subtotalBrut : 1
+
+  // Par marque : brut réel + net calculé par taux de remise global proportionnel
   const brandBreakdown = useMemo(() => {
-    const map = new Map<string,number>()
-    ;(sale.items||[]).forEach(i => { const b = i.product?.brand?.name||'Autre'; map.set(b,(map.get(b)||0)+i.total_price) })
-    return Array.from(map.entries()).sort((a,b)=>b[1]-a[1])
-  }, [sale])
+    const map = new Map<string, number>()  // brut par marque
+    ;(sale.items||[]).forEach(i => {
+      const b = i.product?.brand?.name || 'Autre'
+      map.set(b, (map.get(b) || 0) + i.unit_price * i.quantity)
+    })
+    return Array.from(map.entries())
+      .map(([name, brut]) => {
+        // Le net de cette marque = sa part du brut × taux de remise global
+        const net = Math.round(brut * discountRate * 100) / 100
+        const discount = Math.round((brut - net) * 100) / 100
+        return { name, brut, net, discount }
+      })
+      .sort((a, b) => b.brut - a.brut)
+  }, [sale, discountRate])
+
+  const isMultiBrand = brandBreakdown.length > 1
 
   return (
     <Dialog open onOpenChange={o=>!o&&onClose()}>
-      <DialogContent className="max-w-md p-0 overflow-hidden" hideClose>
+      <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90vh]" hideClose>
         <DialogTitle className="sr-only">Détail de la vente du {date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</DialogTitle>
-        <div className="bg-gray-900 px-6 py-4 rounded-t-2xl">
+        <div className="bg-gray-900 px-6 py-4 rounded-t-2xl shrink-0">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-white font-bold text-base">{date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</p>
@@ -66,7 +90,7 @@ function SaleModal({ sale, onClose }: { sale:Sale; onClose:()=>void }) {
           </div>
           <p className="text-3xl font-black text-white mt-3">{fmt(sale.total)}</p>
         </div>
-        <ScrollArea className="max-h-[60vh]">
+        <ScrollArea className="flex-1 overflow-y-auto">
           <div className="p-6 space-y-4">
             {sale.customer && (
               <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
@@ -88,30 +112,77 @@ function SaleModal({ sale, onClose }: { sale:Sale; onClose:()=>void }) {
               <div className="space-y-2">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Articles ({sale.total_items})</p>
                 <div className="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-50">
-                  {sale.items.map((item,i) => (
-                    <div key={i} className="flex items-center justify-between px-4 py-2.5">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{item.product?.name||'—'}</p>
-                        <p className="text-xs text-gray-400">{item.product?.brand?.name} · {item.unit_price.toFixed(2)} € ×{item.quantity}</p>
+                  {sale.items.map((item,i) => {
+                    const lineTotal = item.unit_price * item.quantity
+                    const hasItemDiscount = Math.abs(lineTotal - item.total_price) > 0.005
+                    return (
+                      <div key={i} className="flex items-center justify-between px-4 py-2.5">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{item.product?.name||'—'}</p>
+                          <p className="text-xs text-gray-400">{item.product?.brand?.name} · {item.unit_price.toFixed(2)} € ×{item.quantity}</p>
+                        </div>
+                        <div className="text-right">
+                          {hasItemDiscount && (
+                            <p className="text-xs text-gray-400 line-through">{lineTotal.toFixed(2)} €</p>
+                          )}
+                          <span className="text-sm font-bold text-gray-900">{item.total_price.toFixed(2)} €</span>
+                        </div>
                       </div>
-                      <span className="text-sm font-bold text-gray-900">{item.total_price.toFixed(2)} €</span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            {isMultiBrand && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Par marque</p>
+                <div className="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-50">
+                  {brandBreakdown.map(({name, brut, net, discount}, i) => (
+                    <div key={name} className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{background: BRAND_COLORS[i % BRAND_COLORS.length]}}/>
+                          <span className="text-sm font-semibold text-gray-900 truncate">{name}</span>
+                        </div>
+                        <span className="text-sm font-black text-gray-900 shrink-0 ml-3">{net.toFixed(2)} €</span>
+                      </div>
+                      {discount > 0.005 && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Brut : {brut.toFixed(2)} €</span>
+                          <span className="text-green-600 font-medium">-{discount.toFixed(2)} €</span>
+                        </div>
+                      )}
+                      {/* Mini barre proportionnelle */}
+                      <div className="mt-1.5 h-1 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{
+                          width: `${subtotalBrut > 0 ? (net / subtotalBrut) * 100 : 0}%`,
+                          background: BRAND_COLORS[i % BRAND_COLORS.length],
+                        }}/>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            {brandBreakdown.length > 1 && (
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Par marque</p>
-                {brandBreakdown.map(([brand,rev],i) => (
-                  <HBar key={brand} label={brand} value={rev} max={brandBreakdown[0][1]} color={BRAND_COLORS[i%BRAND_COLORS.length]}/>
-                ))}
-              </div>
-            )}
             <Separator/>
-            <div className="flex justify-between items-center">
-              <span className="text-base font-bold text-gray-900">Total encaissé</span>
-              <span className="text-xl font-black text-gray-900">{fmt(sale.total)}</span>
+            {/* Récapitulatif avec remises */}
+            <div className="space-y-1.5">
+              {hasDiscount && (
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>Sous-total</span>
+                  <span>{subtotalBrut.toFixed(2)} €</span>
+                </div>
+              )}
+              {hasDiscount && (
+                <div className="flex justify-between text-sm font-medium text-green-600">
+                  <span>Remise(s) appliquée(s)</span>
+                  <span>-{totalDiscount.toFixed(2)} €</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-1">
+                <span className="text-base font-bold text-gray-900">Total encaissé</span>
+                <span className="text-xl font-black text-gray-900">{fmt(sale.total)}</span>
+              </div>
             </div>
           </div>
         </ScrollArea>

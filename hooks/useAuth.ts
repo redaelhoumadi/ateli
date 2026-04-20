@@ -3,7 +3,7 @@ import type { Seller } from '@/types'
 
 export const ROLE_ROUTES: Record<string, string[]> = {
   seller:  ['/pos'],
-  manager: ['/pos', '/produits', '/stock', '/clients', '/marques', '/reversements', '/planning', '/dashboard', '/cloture', '/parametres', '/qr'],
+  manager: ['/pos', '/produits', '/stock', '/clients', '/marques', '/reversements', '/planning', '/dashboard', '/cloture', '/parametres'],
 }
 
 export function canAccess(role: string | null, path: string): boolean {
