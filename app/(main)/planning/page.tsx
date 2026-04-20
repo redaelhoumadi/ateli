@@ -205,19 +205,28 @@ export default function PlanningPage() {
         {view==='grid' && (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full" style={{minWidth:`${Math.max(800,creators.length*150+280)}px`}}>
+              <table className="w-full border-collapse" style={{minWidth: `${Math.max(700, creators.length * 140 + 200)}px`}}>
                 <thead>
                   <tr className="border-b border-gray-100">
-                    <th className="px-5 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wide w-36 border-r border-gray-100">Jour</th>
+                    {/* Sticky day column header */}
+                    <th className="sticky left-0 z-10 bg-white px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wide border-r border-gray-100"
+                        style={{minWidth:'120px', width:'120px'}}>
+                      Jour
+                    </th>
                     {creators.map((c,i)=>(
-                      <th key={c.id} className="px-3 py-4 border-r border-gray-100 last:border-r-0">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs font-black shrink-0" style={{background:COLORS[i%COLORS.length]}}>{c.name[0]}</div>
+                      <th key={c.id} className="px-2 py-3.5 border-r border-gray-100 last:border-r-0 bg-white"
+                          style={{minWidth:'130px', width:'130px'}}>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-black shrink-0"
+                               style={{background:COLORS[i%COLORS.length]}}>{c.name[0]}</div>
                           <span className="text-xs font-bold text-gray-700 truncate">{c.name}</span>
                         </div>
                       </th>
                     ))}
-                    <th className="px-4 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wide w-48">Couverture</th>
+                    <th className="px-3 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wide bg-white"
+                        style={{minWidth:'160px', width:'160px'}}>
+                      Couverture
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -227,9 +236,11 @@ export default function PlanningPage() {
                     const TOTAL=SHOP_CLOSE-SHOP_OPEN
                     return (
                       <tr key={day} className={cn('border-b border-gray-50 last:border-0',today&&'bg-blue-50/40')}>
-                        <td className="px-5 py-4 border-r border-gray-100">
+                        {/* Sticky day cell */}
+                        <td className={cn('sticky left-0 z-10 px-4 py-3.5 border-r border-gray-100', today ? 'bg-blue-50' : 'bg-white')}>
                           <div className="flex items-center gap-2">
-                            <div className={cn('w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black',covered?'bg-green-500':gaps.length>0?'bg-red-500':'bg-gray-200')}>
+                            <div className={cn('w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black',
+                              covered?'bg-green-500':gaps.length>0?'bg-red-500':'bg-gray-200')}>
                               {covered?<Check size={10}/>:gaps.length>0?'!':null}
                             </div>
                             <div>
@@ -239,17 +250,22 @@ export default function PlanningPage() {
                           </div>
                         </td>
                         {creators.map(c=>(
-                          <td key={c.id} className="px-2 py-3 border-r border-gray-100 last:border-r-0">
+                          <td key={c.id} className="px-2 py-2.5 border-r border-gray-100 last:border-r-0">
                             <SlotPicker value={getSlot(di,c.id)} onChange={slot=>setSlot(di,c.id,slot)}/>
                           </td>
                         ))}
-                        <td className="px-4 py-3">
-                          <div className="space-y-1.5">
-                            <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
+                        <td className="px-3 py-2.5">
+                          <div className="space-y-1">
+                            <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
                               {Object.entries(daySlots).map(([id,slot])=>{const cov=getCov(slot);if(!cov)return null;return<div key={id} className="absolute top-0 bottom-0 bg-green-400 opacity-70" style={{left:`${((cov.start-SHOP_OPEN)/TOTAL)*100}%`,width:`${((cov.end-cov.start)/TOTAL)*100}%`}}/>})}
                               {gaps.map((g,i)=><div key={i} className="absolute top-0 bottom-0 bg-red-400 opacity-70" style={{left:`${((g.start-SHOP_OPEN)/TOTAL)*100}%`,width:`${((g.end-g.start)/TOTAL)*100}%`}}/>)}
                             </div>
-                            {covered?<p className="text-xs font-semibold text-green-600">✓ Couverte</p>:gaps.length>0?gaps.map((g,i)=><p key={i} className="text-xs font-semibold text-red-500">⚠ {g.start}h–{g.end}h vide</p>):<p className="text-xs text-gray-300">Non planifié</p>}
+                            {covered
+                              ? <p className="text-xs font-semibold text-green-600">✓ Couverte</p>
+                              : gaps.length>0
+                                ? gaps.map((g,i)=><p key={i} className="text-xs font-semibold text-red-500">⚠ {g.start}h–{g.end}h</p>)
+                                : <p className="text-xs text-gray-300">—</p>
+                            }
                           </div>
                         </td>
                       </tr>
