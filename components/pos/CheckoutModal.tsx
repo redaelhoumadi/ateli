@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { CreditCard, Banknote, Shuffle, X } from 'lucide-react'
+import { CreditCard, Banknote, Shuffle, X, Gift, CheckCircle } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
-import { createSale, checkStockAvailability } from '@/lib/supabase'
+import { createSale, checkStockAvailability, getGiftCardByCode, useGiftCard } from '@/lib/supabase'
 import { getTierForSpend } from '@/lib/customerPortal'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -12,9 +12,10 @@ import {
 import type { Sale } from '@/types'
 
 const METHODS = [
-  { id: 'card',  label: 'Carte',    Icon: CreditCard },
-  { id: 'cash',  label: 'Espèces',  Icon: Banknote },
-  { id: 'mixed', label: 'Mixte',    Icon: Shuffle },
+  { id: 'card',       label: 'Carte',       Icon: CreditCard },
+  { id: 'cash',       label: 'Espèces',     Icon: Banknote },
+  { id: 'mixed',      label: 'Mixte',       Icon: Shuffle },
+  { id: 'gift_card',  label: 'Bon cadeau',  Icon: Gift },
 ]
 const QUICK = [5, 10, 20, 50, 100, 200]
 
@@ -40,6 +41,11 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   const [note, setNote]           = useState('')
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
+  // Gift card
+  const [gcCode, setGcCode]         = useState('')
+  const [gcData, setGcData]         = useState<any>(null)
+  const [gcChecking, setGcChecking] = useState(false)
+  const [gcError, setGcError]       = useState('')
 
   const loyPct  = loyaltyDiscountPct()
   const loyAmt  = loyaltyDiscountAmount()
@@ -49,6 +55,7 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   const manAmt  = manPct > 0 ? (sub - loyAmt) * (manPct / 100) : 0
   const tot     = Math.max(0, sub - loyAmt - manAmt)
   const change  = paymentMethod === 'cash' ? Math.max(0, Number(cash) - tot) : 0
+  const gcSufficient = gcData && gcData.balance >= tot
 
   // Group items by brand for the recap
   const brandGroups = useMemo(() => {
@@ -91,9 +98,25 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
         note: note.trim() || null,
         items: items.map(i => ({ product_id: i.product.id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.total_price })),
       })
+      // If paid by gift card, debit it
+      if (paymentMethod === 'gift_card' && gcData) {
+        await useGiftCard({ gift_card_id: gcData.id, sale_id: (sale as any).id, amount: tot })
+      }
       clearCart(); onSuccess(sale as Sale)
     } catch (e: any) { setError(e.message || 'Erreur') }
     finally { setLoading(false) }
+  }
+
+  const handleCheckGc = async () => {
+    if (!gcCode.trim()) return
+    setGcChecking(true); setGcError(''); setGcData(null)
+    try {
+      const card = await getGiftCardByCode(gcCode)
+      if (!card) { setGcError('Code introuvable'); return }
+      if (card.status !== 'active') { setGcError('Ce bon est déjà utilisé ou annulé'); return }
+      setGcData(card)
+    } catch (e: any) { setGcError(e.message) }
+    finally { setGcChecking(false) }
   }
 
   return (
@@ -174,6 +197,53 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
                 ))}
               </div>
             </div>
+
+            {/* Gift card input */}
+            {paymentMethod === 'gift_card' && (
+              <div className="bg-purple-50 border border-purple-100 rounded-xl p-4 space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={gcCode}
+                    onChange={e => { setGcCode(e.target.value.toUpperCase()); setGcData(null); setGcError('') }}
+                    onKeyDown={e => e.key === 'Enter' && handleCheckGc()}
+                    placeholder="Code du bon (ex: GC-ABCD-EFGH)"
+                    className="flex-1 border border-purple-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white uppercase tracking-wider"
+                  />
+                  <button onClick={handleCheckGc} disabled={gcChecking || !gcCode.trim()}
+                    className="px-4 py-2.5 bg-purple-600 text-white text-sm font-bold rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-all">
+                    {gcChecking ? '…' : 'Vérifier'}
+                  </button>
+                </div>
+                {gcError && <p className="text-sm text-red-600 font-medium">{gcError}</p>}
+                {gcData && (
+                  <div className={cn('rounded-xl p-3 border', gcSufficient ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200')}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {gcSufficient
+                          ? <CheckCircle size={16} className="text-green-500 shrink-0"/>
+                          : <X size={16} className="text-red-500 shrink-0"/>}
+                        <div>
+                          <p className="text-sm font-bold text-gray-900 font-mono">{gcData.code}</p>
+                          {gcData.customer_name && <p className="text-xs text-gray-500">Pour : {gcData.customer_name}</p>}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-base font-black" style={{color: gcSufficient ? '#15803D' : '#B91C1C'}}>
+                          {gcData.balance.toFixed(2)} €
+                        </p>
+                        <p className="text-xs text-gray-400">disponible</p>
+                      </div>
+                    </div>
+                    {!gcSufficient && (
+                      <p className="text-xs text-red-600 font-medium mt-2">
+                        Solde insuffisant — manque {(tot - gcData.balance).toFixed(2)} €
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Cash calculator */}
             {paymentMethod === 'cash' && (

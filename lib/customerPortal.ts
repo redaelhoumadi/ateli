@@ -100,9 +100,10 @@ export async function getCustomerWithHistory(customerId: string) {
 
 // ─── Register new customer (self-service) ──────────────────────
 export async function registerCustomer(data: {
-  name: string
-  email: string
-  phone: string
+  name:              string
+  email:             string
+  phone:             string
+  sendWelcomeEmail?: boolean  // défaut true si email présent
 }) {
   // Check email uniqueness
   const { data: existing } = await supabase
@@ -120,6 +121,34 @@ export async function registerCustomer(data: {
     .single()
 
   if (error) throw error
+
+  // Envoyer l'email de bienvenue si activé (ne bloque pas la création en cas d'échec)
+  const shouldSend = data.sendWelcomeEmail !== false && data.email.trim()
+  if (shouldSend && typeof window !== 'undefined') {
+    try {
+      // Récupérer les settings boutique pour personnaliser l'email
+      const { getSettings } = await import('./supabase')
+      const settings = (await getSettings().catch(() => ({}))) as Record<string, string>
+      const emailEnabled = settings['email_welcome_enabled'] !== 'false'
+
+      if (emailEnabled) {
+        const { sendWelcomeEmail } = await import('./emailSender')
+        sendWelcomeEmail({
+          customerName:  (customer as Customer).name,
+          customerEmail: (customer as Customer).email,
+          customerId:    (customer as Customer).id,
+          shopName:      settings['shop_name']    || 'Ateli',
+          shopEmail:     settings['shop_email']   || '',
+          shopAddress:   settings['shop_address'] || '',
+          fromEmail:     settings['email_from']   || undefined,
+        }).catch(err => console.warn('[welcome email]', err))
+        // Fire-and-forget — ne bloque pas la création du compte
+      }
+    } catch (err) {
+      console.warn('[welcome email setup]', err)
+    }
+  }
+
   return customer as Customer
 }
 

@@ -414,6 +414,147 @@ export async function getBrandSalesHistory(brandId: string, months = 6) {
   return result
 }
 
+// ─── Top produits & tendances ─────────────────────────────────
+
+export async function getTopProducts(options: {
+  dateFrom?: string
+  dateTo?:   string
+  limit?:    number
+  brandId?:  string
+} = {}) {
+  const { dateFrom, dateTo, limit = 20, brandId } = options
+
+  let query = supabase
+    .from('sale_items')
+    .select(`
+      quantity,
+      total_price,
+      unit_price,
+      product:products(
+        id, name, reference, price, image_url,
+        brand:brands(id, name)
+      ),
+      sale:sales(created_at)
+    `)
+
+  if (dateFrom) query = (query as any).gte('sale.created_at', dateFrom)
+  if (dateTo)   query = (query as any).lte('sale.created_at', dateTo)
+
+  const { data, error } = await query
+  if (error) throw error
+
+  // Aggregate by product
+  const map = new Map<string, {
+    product: any
+    qty: number
+    revenue: number
+    orders: number
+  }>()
+
+  ;(data || []).forEach((item: any) => {
+    const p = item.product
+    if (!p) return
+    if (brandId && p.brand?.id !== brandId) return
+    const ex = map.get(p.id) || { product: p, qty: 0, revenue: 0, orders: 0 }
+    ex.qty     += item.quantity
+    ex.revenue += item.total_price
+    ex.orders  += 1
+    map.set(p.id, ex)
+  })
+
+  return Array.from(map.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, limit)
+}
+
+export async function getTrendingProducts(options: {
+  currentFrom:  string
+  currentTo:    string
+  previousFrom: string
+  previousTo:   string
+  limit?:       number
+} = {
+  currentFrom:  new Date(new Date().setDate(new Date().getDate() - 30)).toISOString(),
+  currentTo:    new Date().toISOString(),
+  previousFrom: new Date(new Date().setDate(new Date().getDate() - 60)).toISOString(),
+  previousTo:   new Date(new Date().setDate(new Date().getDate() - 30)).toISOString(),
+  limit:        10,
+}) {
+  const { currentFrom, currentTo, previousFrom, previousTo, limit = 10 } = options
+
+  // Fetch both periods in parallel
+  const [currentData, previousData] = await Promise.all([
+    getTopProducts({ dateFrom: currentFrom, dateTo: currentTo, limit: 100 }),
+    getTopProducts({ dateFrom: previousFrom, dateTo: previousTo, limit: 100 }),
+  ])
+
+  const previousMap = new Map(previousData.map(p => [p.product.id, p]))
+
+  // Compare and compute growth
+  const trends = currentData.map(curr => {
+    const prev  = previousMap.get(curr.product.id)
+    const prevRevenue = prev?.revenue ?? 0
+    const growth = prevRevenue > 0
+      ? ((curr.revenue - prevRevenue) / prevRevenue) * 100
+      : curr.revenue > 0 ? 100 : 0
+    return { ...curr, prevRevenue, growth, isNew: !prev }
+  })
+
+  // Also find declining products (in previous but not in current or much less)
+  const currentIds = new Set(currentData.map(p => p.product.id))
+  const declining  = previousData
+    .filter(p => !currentIds.has(p.product.id) || (previousMap.get(p.product.id)?.revenue ?? 0) > 0)
+    .map(prev => {
+      const curr = currentData.find(c => c.product.id === prev.product.id)
+      const growth = curr
+        ? ((curr.revenue - prev.revenue) / prev.revenue) * 100
+        : -100
+      return { ...prev, prevRevenue: prev.revenue, revenue: curr?.revenue ?? 0, qty: curr?.qty ?? 0, growth, isNew: false }
+    })
+    .filter(p => p.growth < -20)
+    .sort((a, b) => a.growth - b.growth)
+    .slice(0, 5)
+
+  return {
+    rising:   trends.filter(t => t.growth >  20).sort((a, b) => b.growth - a.growth).slice(0, limit),
+    stable:   trends.filter(t => t.growth >= -20 && t.growth <= 20).sort((a, b) => b.revenue - a.revenue).slice(0, limit),
+    declining,
+    newProducts: trends.filter(t => t.isNew).sort((a, b) => b.revenue - a.revenue).slice(0, 5),
+  }
+}
+
+export async function getProductSalesHistory(productId: string, weeks = 8) {
+  const from = new Date()
+  from.setDate(from.getDate() - weeks * 7)
+
+  const { data, error } = await supabase
+    .from('sale_items')
+    .select('quantity, total_price, sale:sales(created_at)')
+    .eq('product_id', productId)
+    .gte('sale.created_at', from.toISOString())
+
+  if (error) throw error
+
+  // Group by week
+  const byWeek = new Map<string, { qty: number; revenue: number }>()
+  ;(data || []).forEach((item: any) => {
+    if (!item.sale?.created_at) return
+    const d    = new Date(item.sale.created_at)
+    const week = `S${Math.floor((d.getTime() - from.getTime()) / (7 * 24 * 3600 * 1000))}`
+    const ex   = byWeek.get(week) || { qty: 0, revenue: 0 }
+    ex.qty     += item.quantity
+    ex.revenue += item.total_price
+    byWeek.set(week, ex)
+  })
+
+  return Array.from({ length: weeks }, (_, i) => ({
+    week: `S${i + 1}`,
+    qty:     byWeek.get(`S${i}`)?.qty     ?? 0,
+    revenue: byWeek.get(`S${i}`)?.revenue ?? 0,
+  }))
+}
+
+
 export async function getProductsByBrand(brandId: string) {
   const { data, error } = await supabase
     .from('products')
@@ -663,6 +804,149 @@ export async function getCustomers() {
   if (error) throw error
   return data
 }
+
+// ─── Bons cadeaux ─────────────────────────────────────────────
+
+function generateGiftCardCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = 'GC-'
+  for (let i = 0; i < 8; i++) {
+    if (i === 4) code += '-'
+    code += chars[Math.floor(Math.random() * chars.length)]
+  }
+  return code // ex: GC-ABCD-EFGH
+}
+
+export async function createGiftCard(data: {
+  initial_amount: number
+  customer_name?:  string | null
+  customer_email?: string | null
+  message?:        string | null
+  created_by?:     string | null
+  expires_at?:     string | null
+}) {
+  let code = generateGiftCardCode()
+  // En cas de collision (rare), regénérer
+  let attempts = 0
+  while (attempts < 5) {
+    const { data: existing } = await supabase.from('gift_cards').select('id').eq('code', code).maybeSingle()
+    if (!existing) break
+    code = generateGiftCardCode()
+    attempts++
+  }
+  const { data: card, error } = await supabase
+    .from('gift_cards')
+    .insert([{ ...data, code, balance: data.initial_amount, status: 'active' }])
+    .select()
+    .single()
+  if (error) throw error
+  return card
+}
+
+export async function getGiftCards(status?: string) {
+  let query = supabase
+    .from('gift_cards')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (status) query = query.eq('status', status)
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export async function getGiftCardByCode(code: string) {
+  const { data, error } = await supabase
+    .from('gift_cards')
+    .select('*')
+    .eq('code', code.trim().toUpperCase())
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function getGiftCardTransactions(giftCardId: string) {
+  const { data, error } = await supabase
+    .from('gift_card_transactions')
+    .select('*')
+    .eq('gift_card_id', giftCardId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function useGiftCard(data: {
+  gift_card_id: string
+  sale_id?:     string | null
+  amount:       number
+  note?:        string | null
+}) {
+  // 1. Récupérer le bon
+  const { data: card, error: fetchErr } = await supabase
+    .from('gift_cards')
+    .select('*')
+    .eq('id', data.gift_card_id)
+    .single()
+  if (fetchErr || !card) throw new Error('Bon cadeau introuvable')
+  if (card.status !== 'active') throw new Error('Ce bon cadeau est déjà utilisé ou annulé')
+  if (card.balance < data.amount) throw new Error(`Solde insuffisant (${card.balance.toFixed(2)} €)`)
+
+  // 2. Calculer le nouveau solde
+  const newBalance = Math.round((card.balance - data.amount) * 100) / 100
+  const newStatus  = newBalance <= 0 ? 'used' : 'active'
+
+  // 3. Mettre à jour le bon
+  const { error: updateErr } = await supabase
+    .from('gift_cards')
+    .update({ balance: newBalance, status: newStatus })
+    .eq('id', data.gift_card_id)
+  if (updateErr) throw updateErr
+
+  // 4. Créer la transaction
+  const { data: tx, error: txErr } = await supabase
+    .from('gift_card_transactions')
+    .insert([{
+      gift_card_id: data.gift_card_id,
+      sale_id:      data.sale_id ?? null,
+      amount:       data.amount,
+      balance_after: newBalance,
+      type:         'debit',
+      note:         data.note ?? null,
+    }])
+    .select()
+    .single()
+  if (txErr) throw txErr
+
+  return { balanceAfter: newBalance, status: newStatus, transaction: tx }
+}
+
+export async function cancelGiftCard(id: string) {
+  const { data, error } = await supabase
+    .from('gift_cards')
+    .update({ status: 'cancelled' })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getGiftCardStats() {
+  const { data, error } = await supabase
+    .from('gift_cards')
+    .select('*')
+  if (error) throw error
+  const all = data || []
+  return {
+    total:     all.length,
+    active:    all.filter(c => c.status === 'active').length,
+    used:      all.filter(c => c.status === 'used').length,
+    cancelled: all.filter(c => c.status === 'cancelled').length,
+    totalIssued:  all.reduce((s: number, c: any) => s + c.initial_amount, 0),
+    totalBalance: all.filter((c: any) => c.status === 'active').reduce((s: number, c: any) => s + c.balance, 0),
+    totalUsed:    all.reduce((s: number, c: any) => s + (c.initial_amount - c.balance), 0),
+  }
+}
+
 
 export async function searchCustomers(term: string) {
   const { data, error } = await supabase

@@ -146,3 +146,28 @@ export type Cloture = {
   closed_at: string
   created_at: string
 }
+
+export type GiftCard = {
+  id:             string
+  code:           string
+  initial_amount: number
+  balance:        number
+  status:         'active' | 'used' | 'expired' | 'cancelled'
+  customer_name:  string | null
+  customer_email: string | null
+  message:        string | null
+  created_by:     string | null
+  expires_at:     string | null
+  created_at:     string
+}
+
+export type GiftCardTransaction = {
+  id:           string
+  gift_card_id: string
+  sale_id:      string | null
+  amount:       number
+  balance_after: number
+  type:         'debit' | 'refund'
+  note:         string | null
+  created_at:   string
+}

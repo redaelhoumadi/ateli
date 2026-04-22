@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import {
   Monitor, Package, Users, Calendar, BarChart2, QrCode, X, Menu,
-  ShoppingCart, ChevronRight, Wallet, Lock, Settings, LogOut, Layers, Boxes,
+  ShoppingCart, ChevronRight, Wallet, Lock, Settings, LogOut, Layers, Boxes, Gift, CircleDollarSign,
 } from 'lucide-react'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -16,8 +16,10 @@ const ALL_NAV_ITEMS = [
   { href: '/pos',          label: 'Caisse POS',   icon: Monitor,   description: 'Interface de caisse' },
   { href: '/produits',     label: 'Produits',     icon: Package,   description: 'Catalogue & stocks' },
   { href: '/clients',      label: 'Clients',      icon: Users,     description: 'Programme fidélité' },
-  { href: '/marques',      label: 'Marques',      icon: Layers,    description: 'Fiches créateurs' },
-  { href: '/reversements', label: 'Reversements', icon: Wallet,    description: 'CA & paiements créateurs' },
+  { href: '/bons-cadeaux',  label: 'Bons cadeaux',  icon: Gift,             description: 'Créer et gérer les bons' },
+  { href: '/marques',       label: 'Marques',        icon: Layers,           description: 'Fiches créateurs' },
+  { href: '/commissions',   label: 'Commissions',    icon: CircleDollarSign, description: 'Taux par marque' },
+  { href: '/reversements',  label: 'Reversements',   icon: Wallet,           description: 'CA & paiements créateurs' },
   { href: '/planning',     label: 'Planning',     icon: Calendar,  description: 'Disponibilités boutique' },
   { href: '/dashboard',    label: 'Dashboard',    icon: BarChart2, description: 'Analyse des ventes' },
   { href: '/cloture',      label: 'Clôture',      icon: Lock,      description: 'Clôture de caisse' },

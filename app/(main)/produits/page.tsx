@@ -3,7 +3,8 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Search, Plus, Tag, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Search, Plus, Tag, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload } from 'lucide-react'
 import {
   getAllProducts, getBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
@@ -28,6 +29,7 @@ type ProductForm = {
 const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null, stock: '', stock_min: '3' }
 
 export default function ProduitsPage() {
+  const router = useRouter()
   const [products, setProducts]     = useState<Product[]>([])
   const [brands, setBrands]         = useState<Brand[]>([])
   const [loading, setLoading]       = useState(true)
@@ -229,6 +231,9 @@ export default function ProduitsPage() {
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => { setNewBrandName(''); setError(''); setModal('brand') }} className="gap-1.5 px-2.5 sm:px-4">
                 <Tag size={14}/><span className="hidden sm:inline">Nouvelle marque</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => router.push('/import')} className="gap-1.5 px-2.5 sm:px-4">
+                <Upload size={14}/><span className="hidden sm:inline">Import CSV</span>
               </Button>
               <Button size="sm" onClick={openAdd} className="gap-1.5 px-2.5 sm:px-4">
                 <Plus size={14}/><span className="hidden sm:inline">Ajouter</span><span className="sm:hidden">+</span>

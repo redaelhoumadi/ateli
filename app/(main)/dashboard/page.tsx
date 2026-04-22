@@ -3,8 +3,8 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useMemo } from 'react'
-import { TrendingUp, ShoppingCart, Package, Users, Calendar, ChevronDown, ChevronUp, X } from 'lucide-react'
-import { getSalesStats, getBrands } from '@/lib/supabase'
+import { TrendingUp, TrendingDown, ShoppingCart, Package, Users, Calendar, ChevronDown, ChevronUp, X, ArrowUp, ArrowDown, Minus, Star } from 'lucide-react'
+import { getSalesStats, getBrands, getTopProducts, getTrendingProducts } from '@/lib/supabase'
 import { getTierForSpend, REWARDS_TIERS } from '@/lib/customerPortal'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
@@ -201,8 +201,52 @@ export default function DashboardPage() {
   const [filterBrand, setFilterBrand]   = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [selectedSale, setSelectedSale] = useState<Sale|null>(null)
+  const [topProducts, setTopProducts]   = useState<any[]>([])
+  const [trends, setTrends]             = useState<{rising:any[];stable:any[];declining:any[];newProducts:any[]}|null>(null)
+  const [loadingTrends, setLoadingTrends] = useState(false)
 
   useEffect(() => { getBrands().then(b => setBrands((b as Brand[])||[])) }, [])
+
+  // Load top products & trends when period changes
+  useEffect(() => {
+    if (period === 'custom' && (!customFrom || !customTo)) return
+    setLoadingTrends(true)
+    const now = new Date()
+    let currentFrom: string|undefined, previousFrom: string|undefined, previousTo: string|undefined
+
+    if (period === 'today') {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      currentFrom  = d.toISOString()
+      previousFrom = new Date(d.getTime() - 7 * 24 * 3600 * 1000).toISOString()
+      previousTo   = d.toISOString()
+    } else if (period === 'week') {
+      const d = new Date(now); d.setDate(d.getDate() - 7)
+      currentFrom  = d.toISOString()
+      const prev   = new Date(now); prev.setDate(prev.getDate() - 14)
+      previousFrom = prev.toISOString()
+      previousTo   = d.toISOString()
+    } else {
+      const d = new Date(now); d.setMonth(d.getMonth() - 1)
+      currentFrom  = d.toISOString()
+      const prev   = new Date(now); prev.setMonth(prev.getMonth() - 2)
+      previousFrom = prev.toISOString()
+      previousTo   = d.toISOString()
+    }
+
+    Promise.all([
+      getTopProducts({ dateFrom: currentFrom, limit: 20 }),
+      currentFrom && previousFrom && previousTo
+        ? getTrendingProducts({
+            currentFrom, currentTo: now.toISOString(),
+            previousFrom, previousTo, limit: 8,
+          })
+        : Promise.resolve(null),
+    ]).then(([top, t]) => {
+      setTopProducts(top || [])
+      if (t) setTrends(t as any)
+    }).catch(console.error)
+    .finally(() => setLoadingTrends(false))
+  }, [period, customFrom, customTo])
 
   useEffect(() => {
     const now = new Date()
@@ -366,6 +410,7 @@ export default function DashboardPage() {
                   <TabsTrigger value="brands">🏷 Par marque</TabsTrigger>
                   <TabsTrigger value="sales">🧾 Ventes</TabsTrigger>
                   <TabsTrigger value="loyalty">🎁 Fidélité</TabsTrigger>
+                  <TabsTrigger value="trends">🔥 Tendances</TabsTrigger>
                 </TabsList>
 
                 {/* Overview */}
@@ -516,6 +561,206 @@ export default function DashboardPage() {
                     </CardContent>
                   </Card>
                 </TabsContent>
+
+                {/* Trends tab */}
+                <TabsContent value="trends">
+                  {loadingTrends ? (
+                    <div className="flex justify-center py-16"><Spinner size="lg"/></div>
+                  ) : (
+                    <div className="space-y-6">
+
+                      {/* Top produits */}
+                      <Card className="overflow-hidden">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Star size={16} className="text-amber-500"/>
+                            Top {Math.min(topProducts.length, 10)} produits
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          {topProducts.length === 0 ? (
+                            <EmptyState icon={<Package size={36} className="text-gray-200"/>} title="Pas de données"/>
+                          ) : (
+                            <div className="space-y-2">
+                              {topProducts.slice(0, 10).map((p, i) => {
+                                const maxRev = topProducts[0]?.revenue ?? 1
+                                return (
+                                  <div key={p.product.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                                    {/* Rank */}
+                                    <span className={cn('w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black shrink-0',
+                                      i === 0 ? 'bg-amber-100 text-amber-700' :
+                                      i === 1 ? 'bg-gray-100 text-gray-600' :
+                                      i === 2 ? 'bg-orange-100 text-orange-700' :
+                                               'text-gray-400')}>
+                                      {i < 3 ? ['🥇','🥈','🥉'][i] : i + 1}
+                                    </span>
+                                    {/* Thumbnail */}
+                                    {p.product.image_url ? (
+                                      <img src={p.product.image_url} alt={p.product.name}
+                                        className="w-10 h-10 rounded-xl object-cover border border-gray-100 shrink-0"/>
+                                    ) : (
+                                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                                        <Package size={14} className="text-gray-300"/>
+                                      </div>
+                                    )}
+                                    {/* Info */}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-semibold text-gray-900 truncate">{p.product.name}</p>
+                                      <p className="text-xs text-gray-400">{p.product.brand?.name} · {p.qty} vendu{p.qty > 1 ? 's' : ''}</p>
+                                    </div>
+                                    {/* Bar + revenue */}
+                                    <div className="flex items-center gap-3 shrink-0">
+                                      <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden hidden sm:block">
+                                        <div className="h-full rounded-full bg-amber-400"
+                                          style={{ width: `${(p.revenue / maxRev) * 100}%` }}/>
+                                      </div>
+                                      <span className="text-sm font-bold text-gray-900 w-20 text-right">{fmtShort(p.revenue)}</span>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {/* Tendances */}
+                      {trends && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                          {/* En hausse */}
+                          <Card className="overflow-hidden">
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2 text-green-700">
+                                <ArrowUp size={15} className="text-green-500"/>
+                                En hausse ({trends.rising.length})
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              {trends.rising.length === 0 ? (
+                                <p className="text-xs text-gray-400 py-3 text-center">Aucun produit en hausse</p>
+                              ) : (
+                                <div className="space-y-3">
+                                  {trends.rising.map(p => (
+                                    <div key={p.product.id} className="flex items-center gap-3">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{p.product.name}</p>
+                                        <p className="text-xs text-gray-400">{p.qty} vendu{p.qty > 1 ? 's' : ''} · {fmtShort(p.revenue)}</p>
+                                      </div>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <ArrowUp size={12} className="text-green-500"/>
+                                        <span className="text-sm font-black text-green-600">
+                                          {p.isNew ? 'Nouveau' : `+${Math.round(p.growth)}%`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+
+                          {/* Stables */}
+                          <Card className="overflow-hidden">
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2 text-gray-700">
+                                <Minus size={15} className="text-gray-400"/>
+                                Stables ({trends.stable.length})
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              {trends.stable.length === 0 ? (
+                                <p className="text-xs text-gray-400 py-3 text-center">Aucun</p>
+                              ) : (
+                                <div className="space-y-3">
+                                  {trends.stable.slice(0, 8).map(p => (
+                                    <div key={p.product.id} className="flex items-center gap-3">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{p.product.name}</p>
+                                        <p className="text-xs text-gray-400">{p.qty} vendu{p.qty > 1 ? 's' : ''} · {fmtShort(p.revenue)}</p>
+                                      </div>
+                                      <span className="text-xs font-semibold text-gray-400">
+                                        {p.growth > 0 ? '+' : ''}{Math.round(p.growth)}%
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+
+                          {/* En baisse */}
+                          <Card className="overflow-hidden">
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2 text-red-700">
+                                <ArrowDown size={15} className="text-red-500"/>
+                                En baisse ({trends.declining.length})
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              {trends.declining.length === 0 ? (
+                                <p className="text-xs text-gray-400 py-3 text-center">Aucun produit en baisse 🎉</p>
+                              ) : (
+                                <div className="space-y-3">
+                                  {trends.declining.map(p => (
+                                    <div key={p.product.id} className="flex items-center gap-3">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{p.product.name}</p>
+                                        <p className="text-xs text-gray-400">
+                                          {p.revenue > 0 ? `${p.qty} vendu${p.qty > 1 ? 's' : ''} · ${fmtShort(p.revenue)}` : 'Aucune vente'}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <ArrowDown size={12} className="text-red-400"/>
+                                        <span className="text-sm font-black text-red-500">
+                                          {p.growth <= -100 ? 'Arrêté' : `${Math.round(p.growth)}%`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </div>
+                      )}
+
+                      {/* Nouveaux produits */}
+                      {trends && trends.newProducts.length > 0 && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              ✨ Nouveaux produits
+                              <Badge variant="info" size="sm">{trends.newProducts.length}</Badge>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                              {trends.newProducts.map(p => (
+                                <div key={p.product.id}
+                                  className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl p-3">
+                                  <p className="text-xs font-bold text-indigo-600 mb-1">Nouveau</p>
+                                  <p className="text-sm font-semibold text-gray-900 truncate">{p.product.name}</p>
+                                  <p className="text-xs text-gray-500 mt-0.5">{p.product.brand?.name}</p>
+                                  <div className="flex items-center justify-between mt-2">
+                                    <span className="text-xs text-gray-500">{p.qty} vente{p.qty > 1 ? 's' : ''}</span>
+                                    <span className="text-sm font-black text-indigo-700">{fmtShort(p.revenue)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Legend */}
+                      <div className="text-xs text-gray-400 text-center">
+                        Comparaison avec la même durée sur la période précédente
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+
               </Tabs>
             </>
           )}

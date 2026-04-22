@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Store, Users, Gift, Save, Plus, Pencil, Trash2,
   CheckCircle, X, ToggleLeft, ToggleRight, Shield,
-  Phone, Mail, MapPin, FileText, Percent, CreditCard, Key,
+  Phone, Mail, MapPin, FileText, Percent, CreditCard, Key, Send, ExternalLink,
 } from 'lucide-react'
 import {
   getSettings, updateSettings,
@@ -132,6 +132,7 @@ const TABS = [
   { id: 'boutique', label: 'Boutique',  icon: Store  },
   { id: 'vendeurs', label: 'Vendeurs',  icon: Users  },
   { id: 'fidelite', label: 'Fidélité',  icon: Gift   },
+  { id: 'email',    label: 'Emails',    icon: Mail   },
 ] as const
 type TabId = typeof TABS[number]['id']
 
@@ -159,8 +160,8 @@ export default function ParametresPage() {
     setLoading(true)
     try {
       const [s, sel] = await Promise.all([getSettings(), getAllSellers()])
-      setSettings(s || {})
-      setLocal(s || {})
+      setSettings((s as Record<string, string>) || {})
+      setLocal((s as Record<string, string>) || {})
       setSellers((sel as Seller[]) || [])
     } finally { setLoading(false) }
   }, [])
@@ -233,7 +234,7 @@ export default function ParametresPage() {
               <h1 className="text-2xl font-bold text-gray-900">Paramètres</h1>
               <p className="text-gray-500 text-sm mt-0.5">Configuration de votre boutique</p>
             </div>
-            {(tab === 'boutique' || tab === 'fidelite') && (
+            {(tab === 'boutique' || tab === 'fidelite' || tab === 'email') && (
               <Button onClick={handleSaveSettings} disabled={saving} className="gap-2">
                 {saving ? <><Spinner size="sm"/> Enregistrement…</> :
                  saved   ? <><CheckCircle size={14}/> Enregistré</> :
@@ -610,6 +611,85 @@ export default function ParametresPage() {
                     </div>
                   ))}
                 </div>
+              </Section>
+            </div>
+          )}
+
+          {/* ════════════════════════════════════
+              TAB: EMAIL
+          ════════════════════════════════════ */}
+          {tab === 'email' && (
+            <div className="space-y-10">
+              <Section
+                title="Email de bienvenue"
+                description="Envoyé automatiquement à chaque nouveau client lors de la création de son compte fidélité.">
+                <Card>
+                  <CardContent className="space-y-5">
+                    {/* Enable toggle */}
+                    <div className="flex items-center justify-between py-1">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Activer l'email de bienvenue</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Envoie le code client et les paliers fidélité à chaque inscription</p>
+                      </div>
+                      <button
+                        onClick={() => set('email_welcome_enabled', get('email_welcome_enabled') === 'false' ? 'true' : 'false')}
+                        className={cn('relative w-12 h-6 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900',
+                          get('email_welcome_enabled') !== 'false' ? 'bg-green-500' : 'bg-gray-200')}>
+                        <span className={cn('absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                          get('email_welcome_enabled') !== 'false' ? 'translate-x-7' : 'translate-x-1')}/>
+                      </button>
+                    </div>
+                    <Separator/>
+                    <Field label="Adresse d'expédition" hint="Doit être un domaine vérifié dans Resend">
+                      <div className="relative">
+                        <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <Input className="pl-9" type="email" placeholder="noreply@ateli.fr"
+                          value={get('email_from')} onChange={e => set('email_from', e.target.value)}/>
+                      </div>
+                    </Field>
+                    {/* Setup guide */}
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
+                      <p className="text-xs font-bold text-indigo-800 uppercase tracking-wide">Configuration Resend requise</p>
+                      <div className="space-y-1.5 text-xs text-indigo-700">
+                        <p>1. Créez un compte sur <a href="https://resend.com" target="_blank" rel="noopener" className="underline font-semibold">resend.com</a> (gratuit jusqu'à 3 000 emails/mois)</p>
+                        <p>2. Vérifiez votre domaine dans Resend → Domains</p>
+                        <p>3. Générez une clé API dans Resend → API Keys</p>
+                        <p>4. Ajoutez dans Vercel → Settings → Environment Variables :</p>
+                        <div className="bg-indigo-100 rounded-lg px-3 py-2 font-mono text-indigo-900 text-[11px] space-y-1 select-all">
+                          <p>RESEND_API_KEY=re_xxxxxxxxxxxx</p>
+                          <p>NEXT_PUBLIC_APP_URL=https://votreapp.vercel.app</p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Test button */}
+                    <div className="flex items-center gap-3">
+                      <Button variant="outline" size="sm" className="gap-2"
+                        onClick={async () => {
+                          const testEmail = prompt('Email de test :')
+                          if (!testEmail) return
+                          try {
+                            const res = await fetch('/api/send-welcome', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                customerName: 'Client Test', customerEmail: testEmail,
+                                customerId: '00000000-0000-0000-0000-000000000001',
+                                shopName: get('shop_name') || 'Ateli',
+                                shopEmail: get('shop_email'), shopAddress: get('shop_address'),
+                                fromEmail: get('email_from') || undefined,
+                                portalBaseUrl: window.location.origin,
+                              }),
+                            })
+                            const json = await res.json()
+                            alert(json.success ? '✓ Email envoyé !' : 'Erreur : ' + (json.error || 'Inconnue'))
+                          } catch (e: any) { alert('Erreur : ' + e.message) }
+                        }}>
+                        <Send size={13}/> Envoyer un email de test
+                      </Button>
+                      <p className="text-xs text-gray-400">Nécessite la clé Resend sur Vercel</p>
+                    </div>
+                  </CardContent>
+                </Card>
               </Section>
             </div>
           )}
