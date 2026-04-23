@@ -5,11 +5,14 @@ import { usePathname } from 'next/navigation'
 import {
   Monitor, Package, Users, Calendar, BarChart2, QrCode, X, Menu,
   ShoppingCart, ChevronRight, Wallet, Lock, Settings, LogOut, Layers, Boxes, Gift, CircleDollarSign,
+  Bell, AlertTriangle, Target, RotateCcw, FileDown, ArrowDownToLine,
 } from 'lucide-react'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
   Separator, cn,
 } from '@/components/ui'
+import { useStockAlerts } from '@/hooks/useStockAlerts'
+import { StockAlertsPanel } from '@/components/stock/StockAlertsPanel'
 import { useAuthStore, ROLE_ROUTES } from '@/hooks/useAuth'
 
 const ALL_NAV_ITEMS = [
@@ -21,7 +24,10 @@ const ALL_NAV_ITEMS = [
   { href: '/commissions',   label: 'Commissions',    icon: CircleDollarSign, description: 'Taux par marque' },
   { href: '/reversements',  label: 'Reversements',   icon: Wallet,           description: 'CA & paiements créateurs' },
   { href: '/planning',     label: 'Planning',     icon: Calendar,  description: 'Disponibilités boutique' },
+  { href: '/objectifs',    label: 'Objectifs',    icon: Target,    description: 'Objectifs de vente' },
   { href: '/dashboard',    label: 'Dashboard',    icon: BarChart2, description: 'Analyse des ventes' },
+  { href: '/retours',      label: 'Retours',       icon: RotateCcw, description: 'Remboursements' },
+  { href: '/export',         label: 'Export compta', icon: FileDown,  description: 'Export CSV comptable' },
   { href: '/cloture',      label: 'Clôture',      icon: Lock,      description: 'Clôture de caisse' },
   { href: '/parametres',   label: 'Paramètres',   icon: Settings,  description: 'Configuration boutique' },
 ]
@@ -36,8 +42,10 @@ export function Sidebar() {
   const { seller, logout } = useAuthStore()
   const [open, setOpen]           = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [alertPanelOpen, setAlertPanelOpen] = useState(false)
+  const { total: alertTotal, criticalCount } = useStockAlerts()
 
-  useEffect(() => { setOpen(false) }, [pathname])
+  useEffect(() => { setOpen(false); setAlertPanelOpen(false) }, [pathname])
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     window.addEventListener('keydown', handler)
@@ -163,7 +171,21 @@ export function Sidebar() {
           </div>
         )}
 
-        <div className="px-3 pb-3 shrink-0 border-t border-gray-100 pt-2">
+        <div className="px-3 pb-3 shrink-0 border-t border-gray-100 pt-2 space-y-1">
+          {alertTotal > 0 && (
+            <button onClick={() => { setOpen(false); setAlertPanelOpen(true) }}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all',
+                criticalCount > 0 ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+              )}>
+              <AlertTriangle size={15} className="shrink-0"/>
+              <span>{criticalCount > 0 ? `${criticalCount} épuisé${criticalCount > 1 ? 's' : ''}` : `${alertTotal} stock bas`}</span>
+              <span className={cn('ml-auto text-xs font-black px-2 py-0.5 rounded-full text-white',
+                criticalCount > 0 ? 'bg-red-500' : 'bg-amber-500')}>
+                {alertTotal}
+              </span>
+            </button>
+          )}
           <LogoutBtn/>
         </div>
       </div>
@@ -280,6 +302,40 @@ export function Sidebar() {
 
           <Separator/>
 
+          {/* Alert bell */}
+          {alertTotal > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={() => setAlertPanelOpen(true)}
+                  className={cn(
+                    'group w-full flex items-center gap-3 rounded-xl transition-all',
+                    collapsed ? 'px-0 py-2.5 justify-center' : 'px-3 py-2.5',
+                    criticalCount > 0
+                      ? 'text-red-600 hover:bg-red-50'
+                      : 'text-amber-600 hover:bg-amber-50'
+                  )}>
+                  <div className="relative shrink-0">
+                    <Bell size={16}/>
+                    <span className={cn(
+                      'absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[9px] font-black text-white flex items-center justify-center',
+                      criticalCount > 0 ? 'bg-red-500' : 'bg-amber-500'
+                    )}>
+                      {alertTotal > 9 ? '9+' : alertTotal}
+                    </span>
+                  </div>
+                  {!collapsed && (
+                    <span className="text-sm font-semibold">
+                      {criticalCount > 0 ? `${criticalCount} épuisé${criticalCount > 1 ? 's' : ''}` : `${alertTotal} stock bas`}
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side={collapsed ? 'right' : 'top'}>
+                {criticalCount > 0 ? `${criticalCount} produit${criticalCount > 1 ? 's' : ''} épuisé${criticalCount > 1 ? 's' : ''}` : `${alertTotal} produit${alertTotal > 1 ? 's' : ''} en stock bas`}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
           {/* Collapse */}
           <button onClick={() => setCollapsed(!collapsed)}
             className={cn(
@@ -291,6 +347,9 @@ export function Sidebar() {
           </button>
         </div>
       </aside>
+
+      {/* Stock alerts panel */}
+      <StockAlertsPanel open={alertPanelOpen} onClose={() => setAlertPanelOpen(false)}/>
 
     </TooltipProvider>
   )

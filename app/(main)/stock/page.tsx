@@ -8,6 +8,7 @@ import {
   Search, RefreshCw, ChevronUp, ChevronDown, Layers,
 } from 'lucide-react'
 import { getStockStats, updateStock, updateStockMin } from '@/lib/supabase'
+import { invalidateStockAlerts } from '@/hooks/useStockAlerts'
 import { getStockStatus } from '@/types'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
@@ -204,6 +205,7 @@ export default function StockPage() {
     await updStock(id, stock)
     await updMin(id, stockMin)
     setAllProducts(prev => prev.map(p => p.id === id ? { ...p, stock, stock_min: stockMin } : p))
+    invalidateStockAlerts() // rafraîchit le badge sidebar
   }, [])
 
   const SortBtn = ({ col, label }: { col: typeof sortCol; label: string }) => (

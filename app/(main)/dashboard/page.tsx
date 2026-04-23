@@ -3,8 +3,8 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useMemo } from 'react'
-import { TrendingUp, TrendingDown, ShoppingCart, Package, Users, Calendar, ChevronDown, ChevronUp, X, ArrowUp, ArrowDown, Minus, Star } from 'lucide-react'
-import { getSalesStats, getBrands, getTopProducts, getTrendingProducts } from '@/lib/supabase'
+import { TrendingUp, TrendingDown, ShoppingCart, Package, Users, Calendar, ChevronDown, ChevronUp, X, ArrowUp, ArrowDown, Minus, Star, Target, Zap } from 'lucide-react'
+import { getSalesStats, getBrands, getTopProducts, getTrendingProducts, getAllGoalProgress } from '@/lib/supabase'
 import { getTierForSpend, REWARDS_TIERS } from '@/lib/customerPortal'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
@@ -201,6 +201,7 @@ export default function DashboardPage() {
   const [filterBrand, setFilterBrand]   = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [selectedSale, setSelectedSale] = useState<Sale|null>(null)
+  const [goals, setGoals]               = useState<any>(null)
   const [topProducts, setTopProducts]   = useState<any[]>([])
   const [trends, setTrends]             = useState<{rising:any[];stable:any[];declining:any[];newProducts:any[]}|null>(null)
   const [loadingTrends, setLoadingTrends] = useState(false)
@@ -247,6 +248,11 @@ export default function DashboardPage() {
     }).catch(console.error)
     .finally(() => setLoadingTrends(false))
   }, [period, customFrom, customTo])
+
+  // Load goals on mount
+  useEffect(() => {
+    getAllGoalProgress().then(g => setGoals(g)).catch(console.error)
+  }, [])
 
   useEffect(() => {
     const now = new Date()
@@ -453,6 +459,44 @@ export default function DashboardPage() {
                       </CardContent>
                     </Card>
                   </div>
+
+                  {/* Goals mini widget */}
+                  {goals && (goals.day || goals.week || goals.month) && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {(['day','week','month'] as const).filter(pt => goals[pt]).map(pt => {
+                        const g = goals[pt]
+                        const COLORS = { day:'#6366f1', week:'#0ea5e9', month:'#10b981' }
+                        const LABELS = { day:"Aujourd'hui", week:'Cette semaine', month:'Ce mois' }
+                        const ICONS  = { day:'☀️', week:'📅', month:'🗓' }
+                        const color  = COLORS[pt]
+                        const pct    = g.pct
+                        const STATUS_COLORS: Record<string,string> = { exceeded:'#059669', ahead:'#0284c7', on_track:'#d97706', at_risk:'#dc2626', missed:'#9ca3af' }
+                        const stColor = STATUS_COLORS[g.status] || color
+                        return (
+                          <div key={pt} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span>{ICONS[pt]}</span>
+                                <p className="text-xs font-semibold text-gray-600">{LABELS[pt]}</p>
+                              </div>
+                              <span className="text-xs font-black" style={{color: stColor}}>{pct}%</span>
+                            </div>
+                            <p className="text-xl font-black text-gray-900 mb-0.5">
+                              {g.achieved >= 1000 ? (g.achieved/1000).toFixed(1)+'k €' : g.achieved.toFixed(0)+' €'}
+                            </p>
+                            <p className="text-xs text-gray-400 mb-2">
+                              / {g.goal.amount >= 1000 ? (g.goal.amount/1000).toFixed(1)+'k €' : g.goal.amount+' €'}
+                            </p>
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-700"
+                                style={{ width:`${Math.min(pct,100)}%`, background: stColor }}/>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
                 </TabsContent>
 
                 {/* Brands */}

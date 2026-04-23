@@ -76,6 +76,11 @@ export type Customer = {
   email: string
   phone: string
   points: number
+  notes:     string | null
+  birthday:  string | null
+  address:   string | null
+  instagram: string | null
+  tags:      string[]
   created_at: string
 }
 
@@ -170,4 +175,34 @@ export type GiftCardTransaction = {
   type:         'debit' | 'refund'
   note:         string | null
   created_at:   string
+}
+
+export type SalesGoal = {
+  id:          string
+  period_type: 'day' | 'week' | 'month'
+  target_date: string   // ISO date
+  amount:      number
+  brand_id:    string | null
+  note:        string | null
+  created_at:  string
+  updated_at:  string
+}
+
+export type GoalProgress = {
+  goal:       SalesGoal
+  achieved:   number   // CA réalisé sur la période
+  pct:        number   // % d'atteinte (0-100+)
+  remaining:  number   // montant restant (peut être négatif si dépassé)
+  status:     'ahead' | 'on_track' | 'at_risk' | 'missed' | 'exceeded'
+}
+
+export type Return = {
+  id:            string
+  sale_id:       string
+  seller_id:     string | null
+  reason:        string | null
+  refund_method: 'cash' | 'card' | 'gift_card' | 'store_credit'
+  total_refund:  number
+  items:         Array<{ product_id: string; name: string; qty: number; unit_price: number; refund_amount: number }>
+  created_at:    string
 }

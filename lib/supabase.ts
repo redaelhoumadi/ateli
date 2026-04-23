@@ -1182,6 +1182,222 @@ export async function getSalesByDate(date: string) {
 
 // ─── Settings ─────────────────────────────────────────────────
 
+// ─── Objectifs de vente ───────────────────────────────────────
+
+function getWeekStart(date: Date): Date {
+  const d = new Date(date)
+  const day = d.getDay()
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function getMonthStart(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1)
+}
+
+function toISODate(d: Date): string {
+  return d.toISOString().split('T')[0]
+}
+
+// ─── Retours / Remboursements ─────────────────────────────────
+
+export async function createReturn(data: {
+  sale_id:       string
+  seller_id?:    string | null
+  reason?:       string | null
+  refund_method: 'cash' | 'card' | 'gift_card' | 'store_credit'
+  total_refund:  number
+  items:         Array<{ product_id: string; name: string; qty: number; unit_price: number; refund_amount: number }>
+}) {
+  const { data: ret, error } = await supabase
+    .from('returns')
+    .insert([data])
+    .select()
+    .single()
+  if (error) throw error
+
+  // Restore stock for returned items
+  for (const item of data.items) {
+    try { await supabase.rpc('restore_stock_manual', { p_product_id: item.product_id, p_qty: item.qty }) } catch { /* best-effort */ }
+  }
+
+  return ret
+}
+
+export async function getReturnsBySale(saleId: string) {
+  const { data, error } = await supabase
+    .from('returns')
+    .select('*')
+    .eq('sale_id', saleId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function getSaleWithItems(saleId: string) {
+  const { data, error } = await supabase
+    .from('sales')
+    .select('*, customer:customers(name), seller:sellers(name), items:sale_items(*, product:products(id, name, price, brand:brands(name)))')
+    .eq('id', saleId)
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ─── Client enrichi ───────────────────────────────────────────
+
+export async function updateCustomerProfile(id: string, data: Partial<{
+  name:      string
+  email:     string
+  phone:     string
+  notes:     string | null
+  birthday:  string | null
+  address:   string | null
+  instagram: string | null
+  tags:      string[]
+}>) {
+  const { data: customer, error } = await supabase
+    .from('customers')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return customer
+}
+
+export async function getCustomerSales(customerId: string) {
+  const { data, error } = await supabase
+    .from('sales')
+    .select('*, items:sale_items(quantity, total_price, product:products(name, brand:brands(name)))')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+    .limit(20)
+  if (error) throw error
+  return data
+}
+
+// ─── Export comptable ─────────────────────────────────────────
+
+export async function getSalesForExport(dateFrom: string, dateTo: string) {
+  const { data, error } = await supabase
+    .from('sales')
+    .select('*, customer:customers(name, email), seller:sellers(name), items:sale_items(quantity, unit_price, total_price, product:products(name, reference, brand:brands(name, commission_rate)))')
+    .gte('created_at', dateFrom)
+    .lte('created_at', dateTo)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+
+export async function getSalesGoals(periodType?: string) {
+  let query = supabase
+    .from('sales_goals')
+    .select('*')
+    .order('target_date', { ascending: false })
+  if (periodType) query = query.eq('period_type', periodType)
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export async function upsertSalesGoal(data: {
+  period_type: 'day' | 'week' | 'month'
+  target_date: string
+  amount: number
+  brand_id?: string | null
+  note?: string | null
+}) {
+  const { data: goal, error } = await supabase
+    .from('sales_goals')
+    .upsert([{ ...data, updated_at: new Date().toISOString() }], {
+      onConflict: 'period_type,target_date,brand_id',
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return goal
+}
+
+export async function deleteSalesGoal(id: string) {
+  const { error } = await supabase.from('sales_goals').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function getGoalProgress(periodType: 'day' | 'week' | 'month', referenceDate: Date = new Date()) {
+  // 1. Get goal for this period
+  let targetDate: string
+  let dateFrom: string
+  let dateTo:   string
+
+  if (periodType === 'day') {
+    const d = new Date(referenceDate)
+    d.setHours(0, 0, 0, 0)
+    targetDate = toISODate(d)
+    dateFrom   = d.toISOString()
+    const end  = new Date(d); end.setHours(23, 59, 59, 999)
+    dateTo     = end.toISOString()
+  } else if (periodType === 'week') {
+    const start = getWeekStart(referenceDate)
+    targetDate  = toISODate(start)
+    dateFrom    = start.toISOString()
+    const end   = new Date(start); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999)
+    dateTo      = end.toISOString()
+  } else {
+    const start = getMonthStart(referenceDate)
+    targetDate  = toISODate(start)
+    dateFrom    = start.toISOString()
+    const end   = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0, 23, 59, 59, 999)
+    dateTo      = end.toISOString()
+  }
+
+  const [goalData, salesData] = await Promise.all([
+    supabase.from('sales_goals').select('*').eq('period_type', periodType).eq('target_date', targetDate).is('brand_id', null).maybeSingle(),
+    supabase.from('sales').select('total').gte('created_at', dateFrom).lte('created_at', dateTo),
+  ])
+
+  if (!goalData.data) return null
+
+  const achieved = (salesData.data || []).reduce((s: number, sale: any) => s + sale.total, 0)
+  const goal = goalData.data
+  const pct  = goal.amount > 0 ? Math.round((achieved / goal.amount) * 100) : 0
+  const remaining = Math.max(0, goal.amount - achieved)
+
+  // Status based on time elapsed in period
+  const now = new Date()
+  let elapsed = 0
+  if (periodType === 'day') {
+    elapsed = (now.getHours() * 60 + now.getMinutes()) / (10 * 60) // 10h shop day
+  } else if (periodType === 'week') {
+    const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay()
+    elapsed = Math.min(1, (dayOfWeek - 1) / 6)
+  } else {
+    const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    elapsed = (now.getDate() - 1) / totalDays
+  }
+
+  let status: 'ahead' | 'on_track' | 'at_risk' | 'missed' | 'exceeded'
+  if (pct >= 100)              status = 'exceeded'
+  else if (elapsed >= 0.95)    status = pct >= 80 ? 'on_track' : 'missed'
+  else if (pct >= elapsed * 100 + 10) status = 'ahead'
+  else if (pct >= elapsed * 100 - 15) status = 'on_track'
+  else                         status = 'at_risk'
+
+  return { goal, achieved: Math.round(achieved * 100) / 100, pct, remaining, status }
+}
+
+export async function getAllGoalProgress(referenceDate: Date = new Date()) {
+  const [day, week, month] = await Promise.all([
+    getGoalProgress('day', referenceDate),
+    getGoalProgress('week', referenceDate),
+    getGoalProgress('month', referenceDate),
+  ])
+  return { day, week, month }
+}
+
+
 export async function getSettings(): Promise<Record<string, string>> {
   const { data, error } = await supabase.from('settings').select('key, value')
   if (error) throw error
