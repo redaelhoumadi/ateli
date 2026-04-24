@@ -42,6 +42,10 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
   // Gift card
+  // Mixed payment
+  const [mixedCard, setMixedCard] = useState('')
+  const [mixedCash, setMixedCash] = useState('')
+
   const [gcCode, setGcCode]         = useState('')
   const [gcData, setGcData]         = useState<any>(null)
   const [gcChecking, setGcChecking] = useState(false)
@@ -56,6 +60,11 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   const tot     = Math.max(0, sub - loyAmt - manAmt)
   const change  = paymentMethod === 'cash' ? Math.max(0, Number(cash) - tot) : 0
   const gcSufficient = gcData && gcData.balance >= tot
+  const mixedCardNum = Math.max(0, Number(mixedCard) || 0)
+  const mixedCashNum = Math.max(0, Number(mixedCash) || 0)
+  const mixedTotal   = mixedCardNum + mixedCashNum
+  const mixedChange  = Math.max(0, mixedCashNum - Math.max(0, tot - mixedCardNum))
+  const mixedOk      = mixedTotal >= tot - 0.005
 
   // Group items by brand for the recap
   const brandGroups = useMemo(() => {
@@ -269,6 +278,57 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Mixed payment */}
+            {paymentMethod === 'mixed' && (
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Répartition du paiement</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">💳 Carte</label>
+                    <div className="relative">
+                      <input type="number" min="0" step="0.01" value={mixedCard}
+                        onChange={e => { setMixedCard(e.target.value); setMixedCash('') }}
+                        placeholder="0.00"
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-bold"/>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">€</span>
+                    </div>
+                    {mixedCard !== '' && <p className="text-xs text-indigo-600 mt-1 font-medium">Espèces : <strong>{Math.max(0, tot - mixedCardNum).toFixed(2)} €</strong></p>}
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">💵 Espèces</label>
+                    <div className="relative">
+                      <input type="number" min="0" step="0.01" value={mixedCash}
+                        onChange={e => setMixedCash(e.target.value)}
+                        placeholder={mixedCard ? Math.max(0, tot - mixedCardNum).toFixed(2) : '0.00'}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-bold"/>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">€</span>
+                    </div>
+                  </div>
+                </div>
+                <div className={cn('rounded-xl px-4 py-3 border', mixedOk ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200')}>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Total encaissé</span>
+                    <span className={cn('font-bold', mixedOk ? 'text-green-700' : 'text-gray-700')}>{mixedTotal.toFixed(2)} €</span>
+                  </div>
+                  {mixedOk && mixedChange > 0.005 && (
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-gray-500">Rendu monnaie</span>
+                      <span className="font-black text-green-700">{mixedChange.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  {!mixedOk && mixedTotal > 0 && (
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-gray-500">Reste à payer</span>
+                      <span className="font-bold text-red-600">{(tot - mixedTotal).toFixed(2)} €</span>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => { setMixedCard(tot.toFixed(2)); setMixedCash('') }} className="text-xs text-indigo-600 font-semibold hover:underline">
+                  Tout en carte ({tot.toFixed(2)} €)
+                </button>
               </div>
             )}
 

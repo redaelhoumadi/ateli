@@ -6,6 +6,8 @@ import { getSellersForLogin } from '@/lib/supabase'
 import { useAuthStore } from '@/hooks/useAuth'
 import { Spinner, cn } from '@/components/ui'
 import type { Seller } from '@/types'
+import Image from "next/image"
+import Logo from "@/public/images/reusable/ateli-logo.png"
 
 const ROLE_META: Record<string, { label: string; color: string; bg: string }> = {
   manager: { label: 'Gérant',  color: '#4338CA', bg: '#EEF2FF' },
@@ -200,10 +202,14 @@ export function PinLockScreen() {
         {/* Logo — uniquement sur la vue grille */}
         {view === 'grid' && (
           <div className="text-center">
-            <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <span className="text-white font-black text-2xl">A</span>
+            <div className=" h-18 rounded-2xl flex items-center justify-center mx-auto mb-4 ">
+              <Image
+              className="w-32 b-1 -ml-2 inline"
+              priority
+              src={Logo}
+              alt="logo"
+            />
             </div>
-            <h1 className="text-2xl font-black text-gray-900">Ateli POS</h1>
             <p className="text-gray-500 text-sm mt-1">Qui est en caisse aujourd'hui ?</p>
           </div>
         )}
