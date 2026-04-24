@@ -16,7 +16,7 @@ import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
   StatCard, Spinner, EmptyState, Separator,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
-  TooltipProvider, cn,
+  TooltipProvider, cn, DatePicker,
 } from '@/components/ui'
 import type { Seller, Cloture } from '@/types'
 
@@ -113,6 +113,7 @@ export default function CloturePage() {
 
   // Load data
   const load = useCallback(async () => {
+    if (!selectedDate) return   // ne pas appeler si la date est vide
     setLoading(true); setSaved(false)
     try {
       const [s, sel, cl, ex] = await Promise.all([
@@ -308,10 +309,7 @@ export default function CloturePage() {
               {/* Date picker */}
               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2">
                 <Calendar size={14} className="text-gray-400 shrink-0"/>
-                <input type="date" value={selectedDate}
-                  max={new Date().toISOString().split('T')[0]}
-                  onChange={e => setSelectedDate(e.target.value)}
-                  className="text-sm text-gray-700 bg-transparent focus:outline-none cursor-pointer"/>
+                <DatePicker value={selectedDate} onChange={e => setSelectedDate(e || new Date().toISOString().split('T')[0])} max={new Date().toISOString().split('T')[0]}/>
               </div>
               <Button variant="outline" size="sm" onClick={exportCSV} disabled={loading || sales.length === 0}>
                 <Download size={14}/> CSV

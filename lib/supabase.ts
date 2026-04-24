@@ -1165,6 +1165,7 @@ export async function createCloture(data: {
 }
 
 export async function getSalesByDate(date: string) {
+  if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) throw new Error('Date invalide')
   const dayStart = new Date(date + 'T00:00:00').toISOString()
   const dayEnd   = new Date(date + 'T23:59:59').toISOString()
 

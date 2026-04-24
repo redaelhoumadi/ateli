@@ -661,6 +661,176 @@ function EmptyState({ icon, title, description, action }: {
   )
 }
 
+// ─── DATE PICKER ─────────────────────────────────────────────
+// Radix Popover + calendrier mensuel custom, même style que Input
+function DatePicker({
+  value,
+  onChange,
+  placeholder = 'Sélectionner une date',
+  min,
+  max,
+  disabled,
+  className,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  min?: string
+  max?: string
+  disabled?: boolean
+  className?: string
+}) {
+  const [open, setOpen] = React.useState(false)
+  // Internal navigation state (YYYY-MM)
+  const today = new Date()
+  const [nav, setNav] = React.useState<{ year: number; month: number }>(() => {
+    if (value) { const d = new Date(value); return { year: d.getFullYear(), month: d.getMonth() } }
+    return { year: today.getFullYear(), month: today.getMonth() }
+  })
+
+  const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  const DAYS   = ['Lu','Ma','Me','Je','Ve','Sa','Di']
+
+  const firstDay = new Date(nav.year, nav.month, 1)
+  // Monday-based offset
+  const startOffset = (firstDay.getDay() + 6) % 7
+  const daysInMonth = new Date(nav.year, nav.month + 1, 0).getDate()
+
+  const toISO = (y: number, m: number, d: number) =>
+    `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+
+  const isSelected = (d: number) => value === toISO(nav.year, nav.month, d)
+  const isToday    = (d: number) => {
+    const t = today
+    return t.getFullYear()===nav.year && t.getMonth()===nav.month && t.getDate()===d
+  }
+  const isDisabled = (d: number) => {
+    const iso = toISO(nav.year, nav.month, d)
+    if (min && iso < min) return true
+    if (max && iso > max) return true
+    return false
+  }
+
+  const prevMonth = () => setNav(n => n.month === 0 ? { year: n.year-1, month: 11 } : { ...n, month: n.month-1 })
+  const nextMonth = () => setNav(n => n.month === 11 ? { year: n.year+1, month: 0 } : { ...n, month: n.month+1 })
+
+  const displayValue = value
+    ? new Date(value + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' })
+    : ''
+
+  const handleSelect = (d: number) => {
+    if (isDisabled(d)) return
+    onChange(toISO(nav.year, nav.month, d))
+    setOpen(false)
+  }
+
+  // Sync nav when value changes externally
+  React.useEffect(() => {
+    if (value) {
+      const d = new Date(value)
+      setNav({ year: d.getFullYear(), month: d.getMonth() })
+    }
+  }, [value])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <div className="relative w-full">
+        <PopoverTrigger asChild>
+          <button
+            disabled={disabled}
+            className={cn(
+              'flex items-center gap-2 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-left',
+              'focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent',
+              'hover:border-gray-300 transition-colors bg-white',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+              value ? 'pr-10' : '',
+              className
+            )}>
+            <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/>
+            </svg>
+            <span className={cn('flex-1 truncate', !displayValue && 'text-gray-400')}>
+              {displayValue || placeholder}
+            </span>
+          </button>
+        </PopoverTrigger>
+        {/* Clear button — outside PopoverTrigger to avoid nested <button> */}
+        {value && !disabled && (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onChange('') }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600 transition-colors z-10">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        )}
+      </div>
+      <PopoverContent className="w-72 p-3 shadow-xl" align="start">
+        {/* Navigation */}
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={prevMonth}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/>
+            </svg>
+          </button>
+          <button
+            onClick={() => { setNav({ year: today.getFullYear(), month: today.getMonth() }) }}
+            className="text-sm font-bold text-gray-900 hover:text-indigo-600 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50">
+            {MONTHS[nav.month]} {nav.year}
+          </button>
+          <button onClick={nextMonth}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/>
+            </svg>
+          </button>
+        </div>
+        {/* Day headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {DAYS.map(d => (
+            <div key={d} className="text-center text-[11px] font-semibold text-gray-400 py-1">{d}</div>
+          ))}
+        </div>
+        {/* Day grid */}
+        <div className="grid grid-cols-7 gap-y-0.5">
+          {/* Empty cells for offset */}
+          {Array.from({ length: startOffset }).map((_, i) => <div key={`e-${i}`}/>)}
+          {/* Day cells */}
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+            const dis = isDisabled(d)
+            const sel = isSelected(d)
+            const tod = isToday(d)
+            return (
+              <button key={d} onClick={() => handleSelect(d)} disabled={dis}
+                className={cn(
+                  'h-8 w-full text-sm font-medium rounded-lg transition-all',
+                  sel && 'bg-gray-900 text-white',
+                  !sel && tod && 'bg-indigo-50 text-indigo-700 font-bold ring-1 ring-indigo-200',
+                  !sel && !tod && !dis && 'text-gray-800 hover:bg-gray-100',
+                  dis && 'text-gray-300 cursor-not-allowed',
+                )}>
+                {d}
+              </button>
+            )
+          })}
+        </div>
+        {/* Today shortcut */}
+        {(!min || today.toISOString().split('T')[0] >= min) && (!max || today.toISOString().split('T')[0] <= max) && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <button
+              onClick={() => { onChange(today.toISOString().split('T')[0]); setOpen(false) }}
+              className="w-full text-xs text-center text-indigo-600 hover:text-indigo-800 font-semibold py-1 hover:bg-indigo-50 rounded-lg transition-colors">
+              Aujourd'hui
+            </button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // ─── LOADING SPINNER ─────────────────────────────────────────
 function Spinner({ size = 'md', className }: { size?: 'sm'|'md'|'lg'; className?: string }) {
   const s = { sm:'w-4 h-4', md:'w-7 h-7', lg:'w-10 h-10' }[size]
@@ -703,7 +873,7 @@ export {
   // Popover
   Popover, PopoverTrigger, PopoverContent,
   // Composite
-  StatCard, EmptyState, Spinner,
+  StatCard, EmptyState, Spinner, DatePicker,
   // Utils
   cn,
 }

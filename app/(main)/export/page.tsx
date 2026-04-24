@@ -7,7 +7,7 @@ import { Download, FileText, Table, Calendar, CheckCircle, Info } from 'lucide-r
 import { getSalesForExport } from '@/lib/supabase'
 import {
   Button, Card, CardHeader, CardTitle, CardContent,
-  Label, Separator, Spinner, StatCard, TooltipProvider, cn,
+  Label, Separator, Spinner, StatCard, TooltipProvider, cn, DatePicker,
 } from '@/components/ui'
 
 const fmt = (n: number) => n.toFixed(2)
@@ -229,13 +229,11 @@ export default function ExportPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Du</Label>
-                    <input type="date" value={customFrom} onChange={e => setFrom(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 cursor-pointer mt-1"/>
+                    <DatePicker value={customFrom} onChange={e => setFrom(e)}/>
                   </div>
                   <div>
                     <Label>Au</Label>
-                    <input type="date" value={customTo} onChange={e => setTo(e.target.value)}
-                      min={customFrom} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 cursor-pointer mt-1"/>
+                    <DatePicker value={customTo} onChange={e => setTo(e)} min={customFrom}/>
                   </div>
                 </div>
               )}

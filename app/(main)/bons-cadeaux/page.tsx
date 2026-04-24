@@ -16,7 +16,7 @@ import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
   Input, Label, Separator, StatCard, Spinner, EmptyState,
-  TooltipProvider, cn,
+  TooltipProvider, cn, DatePicker,
 } from '@/components/ui'
 import type { GiftCard, GiftCardTransaction, Seller } from '@/types'
 
@@ -383,10 +383,7 @@ function CreateModal({ sellers, onClose, onCreated }: {
               </div>
               <div>
                 <Label>Date d'expiration</Label>
-                <input type="date" value={expiry}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={e => setExpiry(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"/>
+                <DatePicker value={expiry} onChange={e => setExpiry(e)} min={new Date().toISOString().split('T')[0]}/>
               </div>
             </div>
 

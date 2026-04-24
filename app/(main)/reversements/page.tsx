@@ -16,7 +16,7 @@ import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
   Input, Label, Separator, Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-  StatCard, Spinner, EmptyState, TooltipProvider, Tooltip, TooltipTrigger, TooltipContent, cn,
+  StatCard, Spinner, EmptyState, TooltipProvider, Tooltip, TooltipTrigger, TooltipContent, cn, DatePicker,
 } from '@/components/ui'
 import type { Brand, BrandStats, Reversement } from '@/types'
 
@@ -461,12 +461,9 @@ export default function RevergementsPage() {
               {period === 'custom' && (
                 <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-1.5">
                   <span className="text-xs text-gray-400">Du</span>
-                  <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-                    className="text-sm text-gray-700 bg-transparent focus:outline-none cursor-pointer"/>
+                  <DatePicker value={customFrom} onChange={e => setCustomFrom(e)}/>
                   <span className="text-xs text-gray-400">au</span>
-                  <input type="date" value={customTo} min={customFrom} max={new Date().toISOString().split('T')[0]}
-                    onChange={e => setCustomTo(e.target.value)}
-                    className="text-sm text-gray-700 bg-transparent focus:outline-none cursor-pointer"/>
+                  <DatePicker value={customTo} onChange={e => setCustomTo(e)} min={customFrom} max={new Date().toISOString().split('T')[0]}/>
                 </div>
               )}
               <Button variant="outline" size="sm" onClick={exportCSV} disabled={loading || stats.length === 0}>

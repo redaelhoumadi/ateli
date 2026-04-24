@@ -12,7 +12,7 @@ import {
   Tabs, TabsList, TabsTrigger, TabsContent,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody,
   Separator, ScrollArea, Spinner, EmptyState,
-  TooltipProvider, cn,
+  TooltipProvider, cn, DatePicker,
 } from '@/components/ui'
 
 type SaleItem = { quantity:number; unit_price:number; total_price:number; product?:{name:string;brand?:{name:string}} }
@@ -368,9 +368,9 @@ export default function DashboardPage() {
               {period==='custom' && (
                 <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-1.5">
                   <span className="text-xs text-gray-400 font-medium shrink-0">Du</span>
-                  <input type="date" value={customFrom} max={customTo||undefined} onChange={e=>setCustomFrom(e.target.value)} className="text-sm text-gray-700 bg-transparent focus:outline-none cursor-pointer"/>
+                  <DatePicker value={customFrom} onChange={e => setCustomFrom(e)} max={customTo||undefined}/>
                   <span className="text-xs text-gray-400 font-medium shrink-0">au</span>
-                  <input type="date" value={customTo} min={customFrom||undefined} max={new Date().toISOString().split('T')[0]} onChange={e=>setCustomTo(e.target.value)} className="text-sm text-gray-700 bg-transparent focus:outline-none cursor-pointer"/>
+                  <DatePicker value={customTo} onChange={e => setCustomTo(e)} min={customFrom||undefined} max={new Date().toISOString().split('T')[0]}/>
                   {(customFrom||customTo) && <button onClick={()=>{setCustomFrom('');setCustomTo('')}} className="text-gray-300 hover:text-gray-600 ml-1"><X size={14}/></button>}
                 </div>
               )}

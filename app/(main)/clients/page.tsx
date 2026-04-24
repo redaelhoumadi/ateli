@@ -12,7 +12,7 @@ import { REWARDS_TIERS } from '@/lib/customerPortal'
 import { getCustomerSales, updateCustomerProfile } from '@/lib/supabase'
 import {
   Button, Card, Input, Label, StatCard, EmptyState, Spinner,
-  Dialog, DialogContent, DialogTitle, Separator, TooltipProvider, cn,
+  Dialog, DialogContent, DialogTitle, Separator, TooltipProvider, cn, DatePicker,
 } from '@/components/ui'
 
 type C = {
@@ -120,7 +120,7 @@ function CustomerModal({ c: init, onClose, onSaved }: { c: C; onClose: ()=>void;
                     <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center shrink-0 text-gray-500"><Cake size={13}/></div>
                     <div className="flex-1">
                       <Label className="text-xs">Anniversaire</Label>
-                      <input type="date" value={fv('birthday')} onChange={e=>sv('birthday',e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mt-0.5"/>
+                      <DatePicker value={fv('birthday')} onChange={e => sv('birthday', e)}/>
                     </div>
                   </div>
                   <div>

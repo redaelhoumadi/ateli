@@ -18,7 +18,7 @@ import {
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
   Input, Label, Separator, Spinner, StatCard, EmptyState,
-  TooltipProvider, cn,
+  TooltipProvider, cn, DatePicker,
 } from '@/components/ui'
 import type { Brand, Product, Reversement } from '@/types'
 
@@ -387,14 +387,11 @@ export default function BrandDetailPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Date d'entrée boutique</Label>
-                      <input type="date" value={g('join_date')} onChange={e => set('join_date', e.target.value)}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 cursor-pointer"/>
+                      <DatePicker value={g('join_date')} onChange={e => set('join_date', e)}/>
                     </div>
                     <div>
                       <Label>Fin de contrat</Label>
-                      <input type="date" value={g('contract_end')} onChange={e => set('contract_end', e.target.value)}
-                        min={g('join_date') || undefined}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 cursor-pointer"/>
+                      <DatePicker value={g('contract_end')} onChange={e => set('contract_end', e)} min={g('join_date')}/>
                     </div>
                   </div>
                 </CardContent>
