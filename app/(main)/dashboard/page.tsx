@@ -85,6 +85,9 @@ function SaleModal({ sale, onClose }: { sale:Sale; onClose:()=>void }) {
             <div>
               <p className="text-white font-bold text-base">{date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</p>
               <p className="text-gray-400 text-xs mt-0.5">{date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · {PAY[sale.payment_method]||sale.payment_method}</p>
+              <p className="text-gray-500 text-xs mt-1 font-mono tracking-wider">
+                #{sale.id.replace(/-/g,'').slice(0,8).toUpperCase()}
+              </p>
             </div>
             <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors rounded-lg p-1.5 hover:bg-white/10"><X size={16}/></button>
           </div>
@@ -536,6 +539,7 @@ export default function DashboardPage() {
                         <table className="w-full">
                           <thead className="bg-gray-50 border-b border-gray-100">
                             <tr>
+                              <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">N° ticket</th>
                               <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date</th>
                               <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Client</th>
                               <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Paiement</th>
@@ -546,6 +550,19 @@ export default function DashboardPage() {
                           <tbody className="divide-y divide-gray-50">
                             {[...filtered].sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()).slice(0,100).map(s=>(
                               <tr key={s.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={()=>setSelectedSale(s)}>
+                                <td className="px-6 py-3.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-sm font-bold text-gray-900 tracking-wider">
+                                      {s.id.replace(/-/g,'').slice(0,8).toUpperCase()}
+                                    </span>
+                                    <button
+                                      onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(s.id) }}
+                                      className="text-gray-300 hover:text-indigo-500 transition-colors text-[10px]"
+                                      title="Copier l'ID complet">
+                                      ⎘
+                                    </button>
+                                  </div>
+                                </td>
                                 <td className="px-6 py-3.5">
                                   <p className="text-sm font-medium text-gray-900">{new Date(s.created_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</p>
                                   <p className="text-xs text-gray-400">{new Date(s.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</p>

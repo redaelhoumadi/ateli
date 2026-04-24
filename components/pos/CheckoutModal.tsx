@@ -29,12 +29,16 @@ const BRAND_COLORS = [
   { bg: '#FFFBEB', border: '#FDE68A', text: '#B45309', dot: '#F59E0B' },
 ]
 
+import { useOfflineCart } from '@/hooks/useOfflineCart'
+
 export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (s: Sale) => void }) {
   const {
     items, customer, customerTotalSpend, sellerId,
     paymentMethod, setPaymentMethod,
     subtotal, loyaltyDiscountPct, loyaltyDiscountAmount, total, totalItems, clearCart,
   } = useCartStore()
+
+  const { clearSavedCart } = useOfflineCart()
 
   const [cash, setCash]           = useState('')
   const [discount, setDiscount]   = useState('')
@@ -111,7 +115,7 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
       if (paymentMethod === 'gift_card' && gcData) {
         await useGiftCard({ gift_card_id: gcData.id, sale_id: (sale as any).id, amount: tot })
       }
-      clearCart(); onSuccess(sale as Sale)
+      clearCart(); clearSavedCart(); onSuccess(sale as Sale)
     } catch (e: any) { setError(e.message || 'Erreur') }
     finally { setLoading(false) }
   }

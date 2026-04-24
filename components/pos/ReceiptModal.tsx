@@ -103,6 +103,10 @@ function buildReceiptHtml(sale: Sale, settings: Record<string,string>): string {
 </body></html>`
 }
 
+function shortId(id: string) {
+  return id.replace(/-/g, '').slice(0, 8).toUpperCase()
+}
+
 export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [printed, setPrinted]   = useState(false)
@@ -140,6 +144,9 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
           <p className="text-gray-400 text-sm mt-1">
             {date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
             {' · '}{sale.total_items} article{sale.total_items > 1 ? 's' : ''}
+          </p>
+          <p className="text-gray-500 text-xs mt-1 font-mono tracking-widest">
+            N° {shortId(sale.id)}
           </p>
         </div>
 
@@ -191,6 +198,17 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
               </div>
             </div>
           )}
+
+          {/* Sale ID for returns */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 flex items-center justify-between">
+            <span className="text-xs text-gray-500">N° ticket (retours)</span>
+            <button
+              className="font-mono text-sm font-bold text-gray-900 hover:text-indigo-600 transition-colors"
+              onClick={() => navigator.clipboard?.writeText(sale.id)}
+              title="Cliquer pour copier l'ID complet">
+              {shortId(sale.id)}
+            </button>
+          </div>
 
           <Separator/>
 

@@ -55,13 +55,23 @@ function SaleRow({ sale }: { sale: Sale }) {
           <p className="text-sm font-medium text-gray-800 truncate">
             {sale.customer?.name ?? <span className="text-gray-400 italic">Anonyme</span>}
           </p>
-          <p className="text-xs text-gray-400">{sale.total_items} art.</p>
+          <p className="text-xs font-mono text-gray-400">#{sale.id.replace(/-/g,'').slice(0,8).toUpperCase()}</p>
         </div>
         <p className="text-sm font-bold text-gray-900 shrink-0">{fmt(sale.total)}</p>
         {open ? <ChevronUp size={14} className="text-gray-400 shrink-0"/> : <ChevronDown size={14} className="text-gray-400 shrink-0"/>}
       </button>
       {open && (
         <div className="bg-gray-50 px-5 py-3 space-y-1.5 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+            <span className="text-xs text-gray-400">N° ticket</span>
+            <button
+              className="font-mono text-xs font-bold text-gray-700 hover:text-indigo-600 transition-colors"
+              onClick={() => navigator.clipboard?.writeText(sale.id).catch(() => {})}
+              title={sale.id}>
+              {sale.id.replace(/-/g,'').slice(0,8).toUpperCase()}
+              <span className="text-[9px] text-gray-300 ml-1">copier</span>
+            </button>
+          </div>
           {(sale.items || []).map((i, idx) => (
             <div key={idx} className="flex justify-between text-xs text-gray-600">
               <span className="truncate mr-3">{i.product?.brand?.name && <span className="text-gray-400">{i.product.brand.name} · </span>}{i.product?.name} ×{i.quantity}</span>

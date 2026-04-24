@@ -56,7 +56,7 @@ function SaleRow({ sale, isLatest, onCancel }: { sale: Sale; isLatest: boolean; 
           ) : (
             <p className="text-xs text-gray-400 italic">Anonyme</p>
           )}
-          <p className="text-xs text-gray-400">{sale.total_items} art.</p>
+          <p className="text-xs font-mono text-gray-400">#{sale.id.replace(/-/g,'').slice(0,8).toUpperCase()}</p>
         </div>
 
         {/* Amount */}
@@ -97,6 +97,18 @@ function SaleRow({ sale, isLatest, onCancel }: { sale: Sale; isLatest: boolean; 
           {sale.seller && (
             <p className="text-xs text-gray-400">Vendeur : {sale.seller.name}</p>
           )}
+
+          {/* Sale ID — for returns */}
+          <div className="flex items-center justify-between bg-white border border-gray-100 rounded-lg px-3 py-2">
+            <span className="text-xs text-gray-400">N° ticket</span>
+            <button
+              className="font-mono text-xs font-bold text-gray-700 hover:text-indigo-600 transition-colors flex items-center gap-1.5"
+              onClick={() => navigator.clipboard?.writeText(sale.id).then(() => {}).catch(() => {})}
+              title={sale.id}>
+              {sale.id.replace(/-/g,'').slice(0,8).toUpperCase()}
+              <span className="text-[9px] text-gray-300 font-normal">copier</span>
+            </button>
+          </div>
 
           {/* Cancel — only for latest sale */}
           {isLatest && !confirming && (

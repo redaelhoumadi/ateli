@@ -29,7 +29,7 @@ export default function POSPage() {
   const [historyOpen, setHistoryOpen]     = useState(false)
 
   const { setSellerId, sellerId, items, totalItems } = useCartStore()
-  const { isOnline, hasSavedCart, savedCart, saveCart, clearSavedCart, timeSaved } = useOfflineCart()
+  const { isOnline, saveCart } = useOfflineCart()
 
   // Auto-save cart to localStorage on every change
   useEffect(() => {
@@ -66,12 +66,6 @@ export default function POSPage() {
       {!isOnline && (
         <div className="fixed top-0 inset-x-0 z-[100] bg-red-600 text-white text-xs font-bold text-center py-1.5">
           ⚠️ Hors ligne · Le panier est sauvegardé automatiquement
-        </div>
-      )}
-      {isOnline && hasSavedCart && savedCart && savedCart.items.length > 0 && itemCount === 0 && (
-        <div className="fixed top-0 inset-x-0 z-[100] bg-amber-500 text-white text-xs font-bold py-2 px-4 flex items-center justify-between">
-          <span>🛒 Panier sauvegardé {timeSaved} — {savedCart.items.length} article{savedCart.items.length > 1 ? 's' : ''}</span>
-          <button onClick={clearSavedCart} className="underline opacity-80 hover:opacity-100">Ignorer</button>
         </div>
       )}
       <div className="h-full flex flex-col bg-gray-50 overflow-hidden">

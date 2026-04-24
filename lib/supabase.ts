@@ -1225,6 +1225,16 @@ export async function createReturn(data: {
   return ret
 }
 
+export async function getAllReturns() {
+  const { data, error } = await supabase
+    .from('returns')
+    .select('*, seller:sellers(name)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+
 export async function getReturnsBySale(saleId: string) {
   const { data, error } = await supabase
     .from('returns')
