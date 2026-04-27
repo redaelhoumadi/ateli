@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { Seller } from '@/types'
 
 export const ROLE_ROUTES: Record<string, string[]> = {
-  seller:  ['/pos', '/clients'],
+  seller:  ['/pos', '/clients', '/retours'],
   manager: ['/pos', '/produits', '/stock', '/import', '/clients', '/bons-cadeaux', '/marques', '/commissions', '/reversements', '/planning', '/objectifs', '/dashboard', '/retours', '/export', '/cloture', '/parametres'],
 }
 
