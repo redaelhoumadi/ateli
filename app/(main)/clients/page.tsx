@@ -6,11 +6,11 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Download, ChevronUp, ChevronDown, Users, TrendingUp, Tag, ShoppingBag,
   X, Save, Phone, Mail, MapPin, Instagram, StickyNote, Cake, ShoppingCart, Edit2,
-  UserPlus, Plus, CheckCircle as CheckCircleIcon,
+  UserPlus, Plus, CheckCircle as CheckCircleIcon, Link2,
 } from 'lucide-react'
 import { getCustomersWithSpend, registerCustomer } from '@/lib/customerPortal'
 import { REWARDS_TIERS } from '@/lib/customerPortal'
-import { getCustomerSales, updateCustomerProfile } from '@/lib/supabase'
+import { getCustomerSales, updateCustomerProfile, getTodaySalesWithoutCustomer, attachCustomerToSale } from '@/lib/supabase'
 import {
   Button, Card, Input, Label, StatCard, EmptyState, Spinner,
   Dialog, DialogContent, DialogTitle,
@@ -27,6 +27,192 @@ const TIER_ICONS: Record<string,string> = { bronze:'🥉', silver:'🥈', gold:'
 const TAGS = ['VIP','Pro','Créateur','Presse','Fidèle','Local','En ligne']
 const fmtE = (n: number) => n.toFixed(2) + ' €'
 
+// ─── Attach sale modal ────────────────────────────────────────
+function AttachSaleModal({ customer, onClose, onAttached }: {
+  customer: C
+  onClose: () => void
+  onAttached: () => void
+}) {
+  const [sales, setSales]       = useState<any[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [attaching, setAttaching] = useState<string | null>(null)
+  const [attached, setAttached] = useState<string | null>(null)
+  const [err, setErr]           = useState('')
+
+  useEffect(() => {
+    getTodaySalesWithoutCustomer()
+      .then(d => setSales(d as any[]))
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const PAY: Record<string, string> = {
+    card: '💳 Carte', cash: '💵 Espèces', mixed: '🔀 Mixte', gift_card: '🎁 Bon cadeau',
+  }
+
+  const handleAttach = async (saleId: string) => {
+    setAttaching(saleId); setErr('')
+    try {
+      await attachCustomerToSale(saleId, customer.id)
+      setAttached(saleId)
+      onAttached()
+    } catch (e: any) { setErr(e.message) }
+    finally { setAttaching(null) }
+  }
+
+  // Filter: show all sales, highlight ones already attached to someone
+  const unattached = sales.filter(s => !s.customer_id)
+  const alreadyAttached = sales.filter(s => s.customer_id)
+
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent className="max-w-md overflow-hidden flex flex-col max-h-[80vh]" hideClose>
+        <DialogTitle className="sr-only">Rattacher une vente</DialogTitle>
+
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-100 shrink-0">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
+                <Link2 size={18} className="text-indigo-600"/>
+              </div>
+              <div>
+                <p className="text-base font-black text-gray-900">Rattacher une vente</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Client : <strong>{customer.name}</strong>
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors p-1">
+              <X size={18}/>
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <p className="text-xs text-gray-500">
+            Sélectionnez une vente d'aujourd'hui à associer à ce client. Les points de fidélité seront appliqués automatiquement.
+          </p>
+
+          {err && (
+            <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-xl">{err}</p>
+          )}
+
+          {loading ? (
+            <div className="flex justify-center py-10"><Spinner size="md"/></div>
+          ) : unattached.length === 0 && alreadyAttached.length === 0 ? (
+            <div className="text-center py-10">
+              <ShoppingCart size={36} className="text-gray-200 mx-auto mb-3"/>
+              <p className="text-sm font-semibold text-gray-700">Aucune vente aujourd'hui</p>
+              <p className="text-xs text-gray-400 mt-1">Les ventes du jour apparaîtront ici</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {/* Unattached sales */}
+              {unattached.length > 0 && (
+                <>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                    Ventes sans client ({unattached.length})
+                  </p>
+                  {unattached.map(sale => {
+                    const isAttached = attached === sale.id
+                    const isAttaching = attaching === sale.id
+                    const items = (sale.items || []).slice(0, 2)
+                    const moreCount = (sale.items || []).length - 2
+
+                    return (
+                      <div key={sale.id}
+                        className={cn(
+                          'border rounded-2xl p-4 transition-all',
+                          isAttached ? 'border-green-200 bg-green-50' : 'border-gray-100 bg-white hover:border-gray-200'
+                        )}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            {/* Time + ID */}
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-xs font-mono font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-lg">
+                                #{sale.id.replace(/-/g,'').slice(0,8).toUpperCase()}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {new Date(sale.created_at).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}
+                              </span>
+                              {sale.seller?.name && (
+                                <span className="text-xs text-gray-400">· {sale.seller.name}</span>
+                              )}
+                            </div>
+                            {/* Items */}
+                            <p className="text-xs text-gray-500 truncate">
+                              {items.map((i: any) => `${i.product?.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`).join(', ')}
+                              {moreCount > 0 && ` +${moreCount} autre${moreCount > 1 ? 's' : ''}`}
+                            </p>
+                            {/* Payment */}
+                            <p className="text-xs text-gray-400 mt-0.5">{PAY[sale.payment_method] || sale.payment_method}</p>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <p className="text-base font-black text-gray-900">{sale.total.toFixed(2)} €</p>
+                            {isAttached ? (
+                              <span className="text-xs font-bold text-green-600 flex items-center gap-1 justify-end mt-1">
+                                <CheckCircleIcon size={12}/> Rattachée
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleAttach(sale.id)}
+                                disabled={!!attaching}
+                                className="mt-1 text-xs font-bold px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-1.5 ml-auto">
+                                {isAttaching ? <Spinner size="sm"/> : <><Link2 size={11}/> Rattacher</>}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </>
+              )}
+
+              {/* Already attached sales — shown for context */}
+              {alreadyAttached.length > 0 && (
+                <>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-3">
+                    Déjà rattachées ({alreadyAttached.length})
+                  </p>
+                  {alreadyAttached.map(sale => (
+                    <div key={sale.id} className="border border-gray-100 rounded-2xl p-4 bg-gray-50 opacity-60">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-mono font-bold text-gray-600 bg-gray-200 px-2 py-0.5 rounded-lg">
+                              #{sale.id.replace(/-/g,'').slice(0,8).toUpperCase()}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(sale.created_at).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-400">Client : {sale.customer?.name}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-gray-500">{sale.total.toFixed(2)} €</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-gray-100 shrink-0">
+          <Button variant="outline" onClick={onClose} className="w-full">Fermer</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Add customer modal ───────────────────────────────────────
 function AddCustomerModal({ onClose, onCreated }: {
   onClose: () => void
@@ -36,6 +222,7 @@ function AddCustomerModal({ onClose, onCreated }: {
   const [saving, setSaving]   = useState(false)
   const [err, setErr]         = useState('')
   const [done, setDone]       = useState<any>(null)
+  const [showAttach, setShowAttach] = useState(false)
 
   const handleCreate = async () => {
     if (!form.name.trim()) return setErr('Le nom est obligatoire')
@@ -58,11 +245,18 @@ function AddCustomerModal({ onClose, onCreated }: {
 
   return (
     <Dialog open onOpenChange={o => !o && onClose()}>
-      <DialogContent className="max-w-sm overflow-y-auto p-4">
+      <DialogContent className="max-w-sm overflow-y-auto">
         <DialogTitle className="sr-only">Nouveau client</DialogTitle>
 
         {done ? (
           /* Success state */
+          showAttach ? (
+            <AttachSaleModal
+              customer={{ ...done, totalSpend:0, tier:{id:'bronze',label:'Bronze',minSpend:0,discount:0,color:'#92400E',bg:'#FEF3C7'}, nextTier:null, tags:[], notes:null, birthday:null, address:null, instagram:null }}
+              onClose={() => setShowAttach(false)}
+              onAttached={() => setShowAttach(false)}
+            />
+          ) : (
           <div className="text-center space-y-5 py-4">
             <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto">
               <CheckCircleIcon size={28} className="text-green-500"/>
@@ -80,6 +274,15 @@ function AddCustomerModal({ onClose, onCreated }: {
               </p>
               <p className="text-xs text-gray-400 mt-2">À communiquer en caisse pour cumuler les points</p>
             </div>
+            {/* Attach sale CTA */}
+            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 text-left">
+              <p className="text-xs font-bold text-indigo-800 mb-1">💡 Rattacher une vente du jour ?</p>
+              <p className="text-xs text-indigo-600 mb-3">Si ce client a déjà acheté aujourd'hui sans être identifié, rattachez la vente pour créditer ses points.</p>
+              <button onClick={() => setShowAttach(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all">
+                <Link2 size={14}/> Rattacher une vente du jour
+              </button>
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => { setDone(null); setForm({ name:'', email:'', phone:'' }) }} className="flex-1">
                 <Plus size={14}/> Autre client
@@ -87,6 +290,7 @@ function AddCustomerModal({ onClose, onCreated }: {
               <Button onClick={onClose} className="flex-1">Fermer</Button>
             </div>
           </div>
+          )
         ) : (
           /* Form */
           <>
@@ -105,7 +309,7 @@ function AddCustomerModal({ onClose, onCreated }: {
                 <Label>Nom complet <span className="text-red-400">*</span></Label>
                 <div className="relative mt-1">
                   <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                  <Input className="pl-4" placeholder="Marie Dupont" value={form.name}
+                  <Input className="pl-9" placeholder="Marie Dupont" value={form.name}
                     onChange={e => setForm(p => ({ ...p, name: e.target.value }))} autoFocus/>
                 </div>
               </div>
@@ -114,7 +318,7 @@ function AddCustomerModal({ onClose, onCreated }: {
                 <Label>Email <span className="text-red-400">*</span></Label>
                 <div className="relative mt-1">
                   <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                  <Input className="pl-4" type="email" placeholder="marie@email.fr" value={form.email}
+                  <Input className="pl-9" type="email" placeholder="marie@email.fr" value={form.email}
                     onChange={e => setForm(p => ({ ...p, email: e.target.value }))}/>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">Un email de bienvenue sera envoyé avec le code fidélité</p>
@@ -124,7 +328,7 @@ function AddCustomerModal({ onClose, onCreated }: {
                 <Label>Téléphone <span className="text-gray-400 font-normal">(optionnel)</span></Label>
                 <div className="relative mt-1">
                   <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                  <Input className="pl-4" type="tel" placeholder="06 12 34 56 78" value={form.phone}
+                  <Input className="pl-9" type="tel" placeholder="06 12 34 56 78" value={form.phone}
                     onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
                     onKeyDown={e => e.key === 'Enter' && handleCreate()}/>
                 </div>
@@ -150,9 +354,8 @@ function AddCustomerModal({ onClose, onCreated }: {
   )
 }
 
-// ─── Customer detail modal ────────────────────────────────────
-function CustomerModal({ c: init, onClose, onSaved }: {
-  c: C; onClose: ()=>void; onSaved: (u: Partial<C>)=>void }) {
+function CustomerModal({ c: init, onClose, onSaved, onAttachSale }: {
+  c: C; onClose: ()=>void; onSaved: (u: Partial<C>)=>void; onAttachSale: ()=>void }) {
   const [c, setC]       = useState(init)
   const [tab, setTab]   = useState<'info'|'achats'|'notes'>('info')
   const [editing, setEditing] = useState(false)
@@ -204,6 +407,11 @@ function CustomerModal({ c: init, onClose, onSaved }: {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <button onClick={onAttachSale}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-white/60 transition-all"
+              title="Rattacher une vente du jour">
+              <Link2 size={14}/>
+            </button>
             <button onClick={() => setEditing(!editing)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-white/60"><Edit2 size={14}/></button>
             <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-white/60"><X size={16}/></button>
           </div>
@@ -326,6 +534,7 @@ export default function ClientsPage() {
   const [sortDir, setSortDir]     = useState<'asc'|'desc'>('desc')
   const [selected, setSelected]   = useState<C|null>(null)
   const [showAdd, setShowAdd]     = useState(false)
+  const [attachTarget, setAttachTarget] = useState<C|null>(null)
 
   useEffect(() => { getCustomersWithSpend().then(d => setCustomers(d as C[])).finally(() => setLoading(false)) }, [])
 
@@ -442,7 +651,20 @@ export default function ClientsPage() {
           </Card>
         </div>
       </div>
-      {selected&&<CustomerModal c={selected} onClose={()=>setSelected(null)} onSaved={u=>{setCustomers(p=>p.map(c=>c.id===selected.id?{...c,...u}:c));setSelected(p=>p?{...p,...u}:null)}}/>}
+      {selected&&<CustomerModal c={selected} onClose={()=>setSelected(null)}
+        onSaved={u=>{setCustomers(p=>p.map(c=>c.id===selected.id?{...c,...u}:c));setSelected(p=>p?{...p,...u}:null)}}
+        onAttachSale={()=>{ setAttachTarget(selected); setSelected(null) }}
+      />}
+      {attachTarget && (
+        <AttachSaleModal
+          customer={attachTarget}
+          onClose={() => setAttachTarget(null)}
+          onAttached={() => {
+            // Refresh list after attach
+            getCustomersWithSpend().then(d => setCustomers(d as C[]))
+          }}
+        />
+      )}
       {showAdd && (
         <AddCustomerModal
           onClose={() => setShowAdd(false)}

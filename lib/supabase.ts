@@ -1080,6 +1080,30 @@ export async function getSalesStats(dateFrom?: string, dateTo?: string) {
 
 
 // ─── Today's sales (for POS history panel) ───────────────────
+export async function attachCustomerToSale(saleId: string, customerId: string) {
+  const { data, error } = await supabase
+    .from('sales')
+    .update({ customer_id: customerId })
+    .eq('id', saleId)
+    .select('*, customer:customers(name)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getTodaySalesWithoutCustomer() {
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const { data, error } = await supabase
+    .from('sales')
+    .select('id, created_at, total, total_items, payment_method, customer_id, customer:customers(name), seller:sellers(name), items:sale_items(quantity, product:products(name))')
+    .gte('created_at', todayStart.toISOString())
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data || [])
+}
+
+
 export async function getTodaySales(sellerId?: string) {
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
