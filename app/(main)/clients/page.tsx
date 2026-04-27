@@ -6,13 +6,15 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Download, ChevronUp, ChevronDown, Users, TrendingUp, Tag, ShoppingBag,
   X, Save, Phone, Mail, MapPin, Instagram, StickyNote, Cake, ShoppingCart, Edit2,
+  UserPlus, Plus, CheckCircle as CheckCircleIcon,
 } from 'lucide-react'
-import { getCustomersWithSpend } from '@/lib/customerPortal'
+import { getCustomersWithSpend, registerCustomer } from '@/lib/customerPortal'
 import { REWARDS_TIERS } from '@/lib/customerPortal'
 import { getCustomerSales, updateCustomerProfile } from '@/lib/supabase'
 import {
   Button, Card, Input, Label, StatCard, EmptyState, Spinner,
-  Dialog, DialogContent, DialogTitle, Separator, TooltipProvider, cn, DatePicker,
+  Dialog, DialogContent, DialogTitle,
+  Separator, TooltipProvider, cn, DatePicker,
 } from '@/components/ui'
 
 type C = {
@@ -25,7 +27,132 @@ const TIER_ICONS: Record<string,string> = { bronze:'🥉', silver:'🥈', gold:'
 const TAGS = ['VIP','Pro','Créateur','Presse','Fidèle','Local','En ligne']
 const fmtE = (n: number) => n.toFixed(2) + ' €'
 
-function CustomerModal({ c: init, onClose, onSaved }: { c: C; onClose: ()=>void; onSaved: (u: Partial<C>)=>void }) {
+// ─── Add customer modal ───────────────────────────────────────
+function AddCustomerModal({ onClose, onCreated }: {
+  onClose: () => void
+  onCreated: (customer: any) => void
+}) {
+  const [form, setForm] = useState({ name: '', email: '', phone: '' })
+  const [saving, setSaving]   = useState(false)
+  const [err, setErr]         = useState('')
+  const [done, setDone]       = useState<any>(null)
+
+  const handleCreate = async () => {
+    if (!form.name.trim()) return setErr('Le nom est obligatoire')
+    if (!form.email.trim()) return setErr('L\'email est obligatoire')
+    if (!form.email.includes('@')) return setErr('Email invalide')
+    setSaving(true); setErr('')
+    try {
+      const customer = await registerCustomer({
+        name:  form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: form.phone.trim(),
+        sendWelcomeEmail: true,
+      })
+      setDone(customer)
+      onCreated(customer)
+    } catch (e: any) {
+      setErr(e.message || 'Erreur lors de la création')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent className="max-w-sm overflow-y-auto p-4">
+        <DialogTitle className="sr-only">Nouveau client</DialogTitle>
+
+        {done ? (
+          /* Success state */
+          <div className="text-center space-y-5 py-4">
+            <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto">
+              <CheckCircleIcon size={28} className="text-green-500"/>
+            </div>
+            <div>
+              <p className="text-lg font-black text-gray-900">Compte créé !</p>
+              <p className="text-sm text-gray-500 mt-1">
+                <strong>{done.name}</strong> est maintenant inscrit au programme fidélité.
+              </p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4">
+              <p className="text-xs text-gray-400 font-medium mb-1">Code client</p>
+              <p className="font-mono text-2xl font-black text-gray-900 tracking-widest">
+                {done.id.replace(/-/g,'').slice(0,8).toUpperCase()}
+              </p>
+              <p className="text-xs text-gray-400 mt-2">À communiquer en caisse pour cumuler les points</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setDone(null); setForm({ name:'', email:'', phone:'' }) }} className="flex-1">
+                <Plus size={14}/> Autre client
+              </Button>
+              <Button onClick={onClose} className="flex-1">Fermer</Button>
+            </div>
+          </div>
+        ) : (
+          /* Form */
+          <>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
+                <UserPlus size={18} className="text-indigo-600"/>
+              </div>
+              <div>
+                <p className="text-base font-black text-gray-900">Nouveau client</p>
+                <p className="text-xs text-gray-400">Créer un compte fidélité</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label>Nom complet <span className="text-red-400">*</span></Label>
+                <div className="relative mt-1">
+                  <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                  <Input className="pl-4" placeholder="Marie Dupont" value={form.name}
+                    onChange={e => setForm(p => ({ ...p, name: e.target.value }))} autoFocus/>
+                </div>
+              </div>
+
+              <div>
+                <Label>Email <span className="text-red-400">*</span></Label>
+                <div className="relative mt-1">
+                  <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                  <Input className="pl-4" type="email" placeholder="marie@email.fr" value={form.email}
+                    onChange={e => setForm(p => ({ ...p, email: e.target.value }))}/>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Un email de bienvenue sera envoyé avec le code fidélité</p>
+              </div>
+
+              <div>
+                <Label>Téléphone <span className="text-gray-400 font-normal">(optionnel)</span></Label>
+                <div className="relative mt-1">
+                  <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                  <Input className="pl-4" type="tel" placeholder="06 12 34 56 78" value={form.phone}
+                    onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && handleCreate()}/>
+                </div>
+              </div>
+
+              {err && (
+                <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-600">
+                  {err}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" onClick={onClose} disabled={saving} className="flex-1">Annuler</Button>
+                <Button onClick={handleCreate} disabled={saving || !form.name || !form.email} className="flex-1 gap-2">
+                  {saving ? <Spinner size="sm"/> : <><UserPlus size={14}/> Créer le compte</>}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Customer detail modal ────────────────────────────────────
+function CustomerModal({ c: init, onClose, onSaved }: {
+  c: C; onClose: ()=>void; onSaved: (u: Partial<C>)=>void }) {
   const [c, setC]       = useState(init)
   const [tab, setTab]   = useState<'info'|'achats'|'notes'>('info')
   const [editing, setEditing] = useState(false)
@@ -198,6 +325,7 @@ export default function ClientsPage() {
   const [sortCol, setSortCol]     = useState<'name'|'spend'|'date'>('spend')
   const [sortDir, setSortDir]     = useState<'asc'|'desc'>('desc')
   const [selected, setSelected]   = useState<C|null>(null)
+  const [showAdd, setShowAdd]     = useState(false)
 
   useEffect(() => { getCustomersWithSpend().then(d => setCustomers(d as C[])).finally(() => setLoading(false)) }, [])
 
@@ -239,7 +367,12 @@ export default function ClientsPage() {
         <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
           <div className="flex items-center justify-between">
             <div><h1 className="text-2xl font-bold text-gray-900">Clients</h1><p className="text-gray-500 text-sm mt-0.5">{customers.length} membres</p></div>
-            <Button variant="outline" onClick={exportCSV} className="gap-1.5"><Download size={14}/><span className="hidden sm:inline">Exporter CSV</span></Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setShowAdd(true)} className="gap-1.5">
+                <UserPlus size={14}/><span className="hidden sm:inline">Ajouter un client</span>
+              </Button>
+              <Button variant="outline" onClick={exportCSV} className="gap-1.5"><Download size={14}/><span className="hidden sm:inline">Exporter CSV</span></Button>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3 lg:gap-4">
             <StatCard label="Total membres" value={customers.length} icon={<Users size={18}/>}/>
@@ -310,6 +443,15 @@ export default function ClientsPage() {
         </div>
       </div>
       {selected&&<CustomerModal c={selected} onClose={()=>setSelected(null)} onSaved={u=>{setCustomers(p=>p.map(c=>c.id===selected.id?{...c,...u}:c));setSelected(p=>p?{...p,...u}:null)}}/>}
+      {showAdd && (
+        <AddCustomerModal
+          onClose={() => setShowAdd(false)}
+          onCreated={newC => {
+            // Refresh the list to include the new customer
+            getCustomersWithSpend().then(d => setCustomers(d as C[]))
+          }}
+        />
+      )}
     </TooltipProvider>
   )
 }
