@@ -73,7 +73,7 @@ export function ProductCatalog() {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-3">
             {products.map((p) => {
               const img  = (p as any).image_url as string | null
               const price = finalPrice(p)
