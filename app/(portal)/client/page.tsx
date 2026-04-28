@@ -15,6 +15,8 @@ import {
   REWARDS_TIERS,
 } from '@/lib/customerPortal'
 import type { Customer } from '@/types'
+import Image from 'next/image'
+import Logo from "@/public/images/reusable/ateli-logo.png"
 
 type View = 'loading' | 'welcome' | 'login' | 'register' | 'dashboard'
 type Tab  = 'avantage' | 'paliers' | 'historique'
@@ -156,18 +158,21 @@ export default function CustomerPortalPage() {
   return (
     <div className="min-h-dvh bg-gray-50 flex flex-col">
       {/* ── Header ── */}
-      <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-black rounded-xl flex items-center justify-center">
-            <span className="text-white text-sm font-black">A</span>
-          </div>
+      <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center sticky top-0 z-10 shadow-sm justify-center">
+        <div className="flex items-center gap-2.5 justify-center">
+          
           <div>
-            <p className="text-sm font-bold text-gray-900 leading-none">Ateli</p>
-            <p className="text-xs text-gray-400 leading-none mt-0.5">Espace fidélité</p>
+            <Image
+              className="w-32 b-1 -ml-2 inline"
+              priority
+              src={Logo}
+              alt="logo"
+            />
+            
           </div>
         </div>
         {view === 'dashboard' && (
-          <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-700 transition-colors py-1 px-2">
+          <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-700 transition-colors py-1 px-2 absolute right-0">
             Déconnexion
           </button>
         )}
@@ -177,10 +182,10 @@ export default function CustomerPortalPage() {
       {view === 'welcome' && (
         <main className="flex-1 flex flex-col px-6 py-10 max-w-sm mx-auto w-full">
           <div className="text-center mb-10">
-            <p className="text-5xl mb-4">🎁</p>
+            <p className="text-5xl mb-4"></p>
             <h1 className="text-3xl font-black text-gray-900 mb-2">Programme<br/>fidélité</h1>
             <p className="text-gray-500 text-sm leading-relaxed">
-              Des réductions automatiques sur tous tes achats — sans carte, sans point, juste des euros.
+              Des réductions automatiques sur tous vos achats
             </p>
           </div>
 
