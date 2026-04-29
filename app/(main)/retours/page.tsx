@@ -7,7 +7,7 @@ import {
   Search, RotateCcw, CheckCircle, AlertTriangle, X,
   Clock, Package, ChevronDown, ChevronUp,
 } from 'lucide-react'
-import { getSalesStats, getSaleWithItems, createReturn, getAllReturns } from '@/lib/supabase'
+import { getSalesStats, getSaleWithItems, createReturn, getAllReturns, getReturnsBySale } from '@/lib/supabase'
 import { useAuthStore } from '@/hooks/useAuth'
 import {
   Button, Card, CardHeader, CardTitle, CardContent,
@@ -111,6 +111,7 @@ function NewReturnForm({ onCreated }: { onCreated: () => void }) {
   const [search, setSearch]           = useState('')
   const [searching, setSearching]     = useState(false)
   const [sale, setSale]               = useState<any>(null)
+  const [existingReturns, setExistingReturns] = useState<Record<string, number>>({}) // product_id → qty already returned
   const [searchErr, setSearchErr]     = useState('')
   const [selectedItems, setSelectedItems] = useState<Map<string, {qty:number;max:number;unit_price:number;name:string}>>(new Map())
   const [reason, setReason]           = useState('')
@@ -132,16 +133,32 @@ function NewReturnForm({ onCreated }: { onCreated: () => void }) {
         return id.startsWith(term) || id.slice(0,8) === term
       })
       if (!found) { setSearchErr('Aucune vente trouvée. Vérifiez le N° ticket.'); return }
-      setSale(await getSaleWithItems(found.id))
+
+      const [fullSale, priorReturns] = await Promise.all([
+        getSaleWithItems(found.id),
+        getReturnsBySale(found.id),
+      ])
+
+      // Build map of already-returned qty per product
+      const alreadyReturned: Record<string, number> = {}
+      for (const ret of (priorReturns || []) as any[]) {
+        for (const item of (ret.items || [])) {
+          alreadyReturned[item.product_id] = (alreadyReturned[item.product_id] || 0) + item.qty
+        }
+      }
+
+      setSale(fullSale)
+      setExistingReturns(alreadyReturned)
     } catch (e: any) { setSearchErr(e.message) }
     finally { setSearching(false) }
   }
 
-  const toggleItem = (item: any) => {
+  const toggleItem = (item: any, remainingQty: number) => {
+    if (remainingQty <= 0) return // fully returned — cannot select
     const next = new Map(selectedItems)
     const pid = item.product.id
     if (next.has(pid)) next.delete(pid)
-    else next.set(pid, { qty:1, max:item.quantity, unit_price:item.unit_price, name:item.product.name })
+    else next.set(pid, { qty: 1, max: remainingQty, unit_price: item.unit_price, name: item.product.name })
     setSelectedItems(next)
   }
 
@@ -234,27 +251,74 @@ function NewReturnForm({ onCreated }: { onCreated: () => void }) {
             <CardHeader><CardTitle>Articles à retourner</CardTitle></CardHeader>
             <div className="divide-y divide-gray-50">
               {(sale.items || []).map((item: any) => {
-                const pid = item.product?.id
-                const sel = selectedItems.get(pid)
+                const pid          = item.product?.id
+                const sel          = selectedItems.get(pid)
+                const alreadyQty   = existingReturns[pid] || 0
+                const remainingQty = item.quantity - alreadyQty
+                const fullyReturned = remainingQty <= 0
+                const partlyReturned = alreadyQty > 0 && remainingQty > 0
+
                 return (
-                  <div key={pid} className={cn('flex items-center gap-4 px-5 py-3.5 cursor-pointer transition-colors', sel?'bg-indigo-50':'hover:bg-gray-50')} onClick={() => toggleItem(item)}>
-                    <div className={cn('w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all', sel?'bg-indigo-600 border-indigo-600':'border-gray-300')}>
-                      {sel && <CheckCircle size={12} className="text-white"/>}
+                  <div key={pid}
+                    className={cn(
+                      'flex items-center gap-4 px-5 py-3.5 transition-colors',
+                      fullyReturned ? 'opacity-40 cursor-not-allowed bg-gray-50' :
+                      sel ? 'bg-indigo-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer'
+                    )}
+                    onClick={() => !fullyReturned && toggleItem(item, remainingQty)}>
+
+                    {/* Checkbox */}
+                    <div className={cn(
+                      'w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all',
+                      fullyReturned ? 'border-gray-200 bg-gray-100' :
+                      sel ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
+                    )}>
+                      {sel && !fullyReturned && <CheckCircle size={12} className="text-white"/>}
+                      {fullyReturned && <X size={10} className="text-gray-400"/>}
                     </div>
+
+                    {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{item.product?.name}</p>
-                      <p className="text-xs text-gray-400">{item.product?.brand?.name} · {item.unit_price.toFixed(2)} € × {item.quantity}</p>
+                      <p className={cn('text-sm font-semibold truncate', fullyReturned ? 'text-gray-400 line-through' : 'text-gray-900')}>
+                        {item.product?.name}
+                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs text-gray-400">
+                          {item.unit_price.toFixed(2)} € × {item.quantity}
+                        </p>
+                        {fullyReturned && (
+                          <span className="text-[10px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">
+                            Déjà retourné
+                          </span>
+                        )}
+                        {partlyReturned && (
+                          <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                            {alreadyQty} déjà retourné{alreadyQty > 1 ? 's' : ''} · {remainingQty} restant{remainingQty > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {sel && (
+
+                    {/* Qty stepper if selected */}
+                    {sel && !fullyReturned && (
                       <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => updateQty(pid, sel.qty-1)} className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold">−</button>
+                        <button onClick={() => updateQty(pid, sel.qty - 1)}
+                          className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold">−</button>
                         <span className="text-sm font-bold w-6 text-center">{sel.qty}</span>
-                        <button onClick={() => updateQty(pid, sel.qty+1)} disabled={sel.qty>=sel.max} className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold disabled:opacity-30">+</button>
+                        <button onClick={() => updateQty(pid, sel.qty + 1)}
+                          disabled={sel.qty >= remainingQty}
+                          className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold disabled:opacity-30">+</button>
                       </div>
                     )}
+
+                    {/* Price */}
                     <div className="text-right shrink-0 w-20">
-                      <p className="text-sm font-bold text-gray-900">{item.total_price.toFixed(2)} €</p>
-                      {sel && sel.qty !== item.quantity && <p className="text-xs text-indigo-600">→ {(sel.qty * item.unit_price).toFixed(2)} €</p>}
+                      <p className={cn('text-sm font-bold', fullyReturned ? 'text-gray-300 line-through' : 'text-gray-900')}>
+                        {item.total_price.toFixed(2)} €
+                      </p>
+                      {sel && sel.qty !== item.quantity && (
+                        <p className="text-xs text-indigo-600">→ {(sel.qty * item.unit_price).toFixed(2)} €</p>
+                      )}
                     </div>
                   </div>
                 )

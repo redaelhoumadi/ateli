@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { getCustomersWithSpend, registerCustomer } from '@/lib/customerPortal'
 import { REWARDS_TIERS } from '@/lib/customerPortal'
-import { getCustomerSales, updateCustomerProfile, getTodaySalesWithoutCustomer, attachCustomerToSale } from '@/lib/supabase'
+import { getCustomerSales, updateCustomerProfile, getTodaySalesWithoutCustomer, attachCustomerToSale, getCustomerReturns } from '@/lib/supabase'
 import {
   Button, Card, Input, Label, StatCard, EmptyState, Spinner,
   Dialog, DialogContent, DialogTitle,
@@ -360,6 +360,7 @@ function CustomerModal({ c: init, onClose, onSaved, onAttachSale }: {
   const [tab, setTab]   = useState<'info'|'achats'|'notes'>('info')
   const [editing, setEditing] = useState(false)
   const [sales, setSales]     = useState<any[]>([])
+  const [returns, setReturns] = useState<any[]>([])
   const [loadingSales, setLoadingSales] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [err, setErr]         = useState('')
@@ -386,7 +387,13 @@ function CustomerModal({ c: init, onClose, onSaved, onAttachSale }: {
   useEffect(() => {
     if (tab === 'achats' && sales.length === 0) {
       setLoadingSales(true)
-      getCustomerSales(c.id).then(d => setSales((d as any[]) || [])).finally(() => setLoadingSales(false))
+      Promise.all([
+        getCustomerSales(c.id),
+        getCustomerReturns(c.id),
+      ]).then(([s, r]) => {
+        setSales((s as any[]) || [])
+        setReturns((r as any[]) || [])
+      }).finally(() => setLoadingSales(false))
     }
   }, [tab, c.id, sales.length])
 
@@ -490,23 +497,77 @@ function CustomerModal({ c: init, onClose, onSaved, onAttachSale }: {
           )}
           {tab === 'achats' && (
             <div className="p-5 space-y-4">
+              {/* KPIs */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3 text-center"><p className="text-lg font-black">{sales.length}</p><p className="text-xs text-gray-400">Achats</p></div>
-                <div className="bg-gray-50 rounded-xl p-3 text-center"><p className="text-lg font-black">{fmtE(totalSpend)}</p><p className="text-xs text-gray-400">Total</p></div>
-                <div className="bg-gray-50 rounded-xl p-3 text-center"><p className="text-lg font-black">{sales.length>0?fmtE(totalSpend/sales.length):'—'}</p><p className="text-xs text-gray-400">Moy.</p></div>
-              </div>
-              {loadingSales ? <div className="flex justify-center py-8"><Spinner size="md"/></div> :
-               sales.length===0 ? <div className="text-center py-8"><ShoppingCart size={32} className="text-gray-200 mx-auto mb-2"/><p className="text-sm text-gray-400">Aucun achat</p></div> :
-               <div className="space-y-2">{sales.map((s:any) => (
-                <div key={s.id} className="bg-white border border-gray-100 rounded-xl p-3.5">
-                  <div className="flex justify-between mb-1.5">
-                    <p className="text-xs text-gray-500">{new Date(s.created_at).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'short'})}</p>
-                    <p className="text-sm font-black">{fmtE(s.total)}</p>
-                  </div>
-                  {(s.items||[]).slice(0,3).map((i:any,idx:number) => <p key={idx} className="text-xs text-gray-500 truncate">{i.product?.name} ×{i.quantity}</p>)}
-                  {(s.items||[]).length>3 && <p className="text-xs text-gray-300">+{s.items.length-3} autres…</p>}
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <p className="text-lg font-black">{sales.length}</p>
+                  <p className="text-xs text-gray-400">Achats</p>
                 </div>
-               ))}</div>}
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <p className="text-lg font-black">{fmtE(totalSpend)}</p>
+                  <p className="text-xs text-gray-400">CA net</p>
+                </div>
+                <div className={cn('rounded-xl p-3 text-center', returns.length > 0 ? 'bg-red-50' : 'bg-gray-50')}>
+                  <p className={cn('text-lg font-black', returns.length > 0 ? 'text-red-600' : 'text-gray-900')}>
+                    {returns.length > 0 ? `-${fmtE(returns.reduce((s:number,r:any)=>s+r.total_refund,0))}` : '—'}
+                  </p>
+                  <p className="text-xs text-gray-400">{returns.length > 0 ? `${returns.length} retour${returns.length>1?'s':''}` : 'Retours'}</p>
+                </div>
+              </div>
+
+              {loadingSales ? (
+                <div className="flex justify-center py-8"><Spinner size="md"/></div>
+              ) : sales.length === 0 ? (
+                <div className="text-center py-8">
+                  <ShoppingCart size={32} className="text-gray-200 mx-auto mb-2"/>
+                  <p className="text-sm text-gray-400">Aucun achat</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sales.map((s:any) => {
+                    // Returns linked to this sale
+                    const saleReturns = returns.filter((r:any) => r.sale_id === s.id)
+                    return (
+                      <div key={s.id} className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+                        {/* Sale row */}
+                        <div className="p-3.5">
+                          <div className="flex justify-between mb-1.5">
+                            <p className="text-xs text-gray-500">
+                              {new Date(s.created_at).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'short'})}
+                            </p>
+                            <p className="text-sm font-black">{fmtE(s.total)}</p>
+                          </div>
+                          {(s.items||[]).slice(0,3).map((i:any,idx:number) => (
+                            <p key={idx} className="text-xs text-gray-500 truncate">{i.product?.name} ×{i.quantity}</p>
+                          ))}
+                          {(s.items||[]).length > 3 && (
+                            <p className="text-xs text-gray-300">+{s.items.length-3} autres…</p>
+                          )}
+                        </div>
+                        {/* Returns linked to this sale */}
+                        {saleReturns.map((r:any) => (
+                          <div key={r.id} className="border-t border-red-100 bg-red-50 px-3.5 py-2.5 flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-red-400 shrink-0">↩</span>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-red-700">Retour</p>
+                                <p className="text-[11px] text-red-400 truncate">
+                                  {new Date(r.created_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}
+                                  {r.reason ? ` · ${r.reason}` : ''}
+                                </p>
+                                <p className="text-[11px] text-red-400">
+                                  {(r.items||[]).map((i:any)=>`${i.name} ×${i.qty}`).join(', ')}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-sm font-black text-red-600 shrink-0">-{fmtE(r.total_refund)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
           {tab === 'notes' && (

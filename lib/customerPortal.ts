@@ -87,14 +87,32 @@ export async function getCustomerWithHistory(customerId: string) {
   if (ce) throw ce
   if (se) throw se
 
-  const totalSpend = (sales || []).reduce((s: number, v: any) => s + v.total, 0)
+  // Déduire les retours pour le bon calcul du palier fidélité
+  const saleIds = (sales || []).map((s: any) => s.id)
+  let totalRefund = 0
+  if (saleIds.length > 0) {
+    const { data: returns } = await supabase
+      .from('returns')
+      .select('total_refund')
+      .in('sale_id', saleIds)
+    totalRefund = (returns || []).reduce((s: number, r: any) => s + r.total_refund, 0)
+  }
+
+  const grossSpend = (sales || []).reduce((s: number, v: any) => s + v.total, 0)
+  const totalSpend = Math.max(0, grossSpend - totalRefund)
+
+  // Also expose the returns list for display
+  const { data: returnsList } = saleIds.length > 0
+    ? await supabase.from('returns').select('*').in('sale_id', saleIds).order('created_at', { ascending: false })
+    : { data: [] }
 
   return {
     customer: customer as Customer,
     sales: (sales || []) as any[],
+    returns: (returnsList || []) as any[],
     totalSpend,
     currentTier: getTierForSpend(totalSpend),
-    nextTier: getNextTier(totalSpend),
+    nextTier:    getNextTier(totalSpend),
   }
 }
 
@@ -170,24 +188,41 @@ export function clearSession() {
 
 // ─── All customers with their total spend (for admin page) ─────
 export async function getCustomersWithSpend() {
-  // Fetch all customers + their sales totals in one join
+  // Fetch customers + sales + returns in parallel
   const { data, error } = await supabase
     .from('customers')
     .select(`
       *,
-      sales(total)
+      sales(id, total)
     `)
     .order('name')
 
   if (error) throw error
 
+  // Fetch all returns once, grouped by sale_id
+  const saleIds = (data || []).flatMap((c: any) => (c.sales || []).map((s: any) => s.id))
+  let returnsBySaleId: Record<string, number> = {}
+
+  if (saleIds.length > 0) {
+    const { data: returns } = await supabase
+      .from('returns')
+      .select('sale_id, total_refund')
+      .in('sale_id', saleIds)
+
+    for (const r of returns || []) {
+      returnsBySaleId[r.sale_id] = (returnsBySaleId[r.sale_id] || 0) + r.total_refund
+    }
+  }
+
   return (data || []).map((c: any) => {
-    const totalSpend = (c.sales || []).reduce((s: number, v: any) => s + (v.total || 0), 0)
+    const grossSpend  = (c.sales || []).reduce((s: number, v: any) => s + (v.total || 0), 0)
+    const totalRefund = (c.sales || []).reduce((s: number, v: any) => s + (returnsBySaleId[v.id] || 0), 0)
+    const totalSpend  = Math.max(0, grossSpend - totalRefund)
     return {
       ...c,
-      sales: undefined, // strip raw sales
+      sales: undefined,
       totalSpend,
-      tier: getTierForSpend(totalSpend),
+      tier:     getTierForSpend(totalSpend),
       nextTier: getNextTier(totalSpend),
     }
   })

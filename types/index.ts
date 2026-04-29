@@ -129,7 +129,7 @@ export type CartItem = {
   total_price: number
 }
 
-export type PaymentMethod = 'cash' | 'card' | 'points' | 'mixed'
+export type PaymentMethod = 'cash' | 'card' | 'points' | 'mixed' | 'gift_card'
 
 export type Cloture = {
   id: string

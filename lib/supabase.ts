@@ -1235,6 +1235,46 @@ export async function createReturn(data: {
   total_refund:  number
   items:         Array<{ product_id: string; name: string; qty: number; unit_price: number; refund_amount: number }>
 }) {
+  // ── Guard : vérifier les quantités déjà retournées pour cette vente ──
+  const { data: priorReturns } = await supabase
+    .from('returns')
+    .select('items')
+    .eq('sale_id', data.sale_id)
+
+  // Build map of already-returned qty per product
+  const alreadyReturned: Record<string, number> = {}
+  for (const ret of (priorReturns || []) as any[]) {
+    for (const item of (ret.items || [])) {
+      alreadyReturned[item.product_id] = (alreadyReturned[item.product_id] || 0) + item.qty
+    }
+  }
+
+  // Fetch original sale items to know max quantities
+  const { data: saleItems } = await supabase
+    .from('sale_items')
+    .select('product_id, quantity')
+    .eq('sale_id', data.sale_id)
+
+  const saleQtyMap: Record<string, number> = {}
+  for (const si of (saleItems || []) as any[]) {
+    saleQtyMap[si.product_id] = si.quantity
+  }
+
+  // Validate each item in the return request
+  for (const item of data.items) {
+    const originalQty = saleQtyMap[item.product_id] || 0
+    const alreadyQty  = alreadyReturned[item.product_id] || 0
+    const remainingQty = originalQty - alreadyQty
+
+    if (item.qty > remainingQty) {
+      throw new Error(
+        `"${item.name}" : impossible de retourner ${item.qty} unité${item.qty > 1 ? 's' : ''} ` +
+        `(${alreadyQty > 0 ? `${alreadyQty} déjà retourné${alreadyQty > 1 ? 's' : ''}, ` : ''}` +
+        `${remainingQty} restant${remainingQty > 1 ? 's' : ''})`
+      )
+    }
+  }
+  // ── Fin de la vérification ──
   const { data: ret, error } = await supabase
     .from('returns')
     .insert([data])
@@ -1242,13 +1282,72 @@ export async function createReturn(data: {
     .single()
   if (error) throw error
 
-  // Restore stock for returned items
+  // Restore stock for returned items (best-effort)
   for (const item of data.items) {
     try { await supabase.rpc('restore_stock_manual', { p_product_id: item.product_id, p_qty: item.qty }) } catch { /* best-effort */ }
   }
 
+  // Déduire les points fidélité proportionnellement au montant remboursé
+  try {
+    const { data: sale, error: saleErr } = await supabase
+      .from('sales')
+      .select('customer_id, total')
+      .eq('id', data.sale_id)
+      .single()
+
+    if (!saleErr && sale?.customer_id && sale.total > 0) {
+      // On retire les points au prorata : 1 point par euro remboursé (même règle qu'à l'achat)
+      // Calcul : points à retirer = floor(montant_remboursé)
+      // Si retour partiel : on retire uniquement les points de la partie remboursée
+      const ratio         = Math.min(1, data.total_refund / sale.total)
+      const pointsToDebit = Math.floor(sale.total * ratio) // plancher pour être généreux
+
+      if (pointsToDebit > 0) {
+        const { data: customer, error: custErr } = await supabase
+          .from('customers')
+          .select('points')
+          .eq('id', sale.customer_id)
+          .single()
+
+        if (!custErr && customer) {
+          const newPoints = Math.max(0, customer.points - pointsToDebit)
+          await supabase
+            .from('customers')
+            .update({ points: newPoints })
+            .eq('id', sale.customer_id)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[createReturn] Erreur débit points:', e)
+    // Ne bloque pas le retour mais on log pour debug
+  }
+
   return ret
 }
+
+export async function getCustomerReturns(customerId: string) {
+  // Fetch all sales for this customer, then get returns for those sales
+  const { data: sales, error: se } = await supabase
+    .from('sales')
+    .select('id')
+    .eq('customer_id', customerId)
+
+  if (se) throw se
+  if (!sales || sales.length === 0) return []
+
+  const saleIds = sales.map((s: any) => s.id)
+
+  const { data, error } = await supabase
+    .from('returns')
+    .select('*, seller:sellers(name)')
+    .in('sale_id', saleIds)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
 
 export async function getAllReturns() {
   const { data, error } = await supabase
