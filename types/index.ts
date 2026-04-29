@@ -239,3 +239,32 @@ export type Reservation = {
   customer?:      { name: string; email?: string } | null
   seller?:        { name: string } | null
 }
+
+// ─── Promotions ───────────────────────────────────────────────
+export type Promotion = {
+  id:              string
+  name:            string
+  description:     string | null
+  discount_pct:    number
+  brand_ids:       string[]
+  product_ids:     string[]
+  category_names:  string[]
+  starts_at:       string
+  ends_at:         string
+  is_active:       boolean
+  applied_at:      string | null
+  created_at:      string
+  updated_at:      string
+}
+
+export type PromotionStatus = 'scheduled' | 'active' | 'ended' | 'inactive'
+
+export function getPromotionStatus(promo: Promotion): PromotionStatus {
+  if (!promo.is_active) return 'inactive'
+  const now = new Date()
+  if (new Date(promo.starts_at) > now) return 'scheduled'
+  if (new Date(promo.ends_at) < now) return 'ended'
+  return 'active'
+}
+
+// ─── Promotions ────────────────────────────────────────────────

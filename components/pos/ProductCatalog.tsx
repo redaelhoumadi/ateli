@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
-import { getProducts, getBrands, searchProducts } from '@/lib/supabase'
+import { getProducts, getBrands, searchProducts, applyActivePromotions } from '@/lib/supabase'
 import { Input, Badge, Spinner, cn } from '@/components/ui'
 import { getStockStatus } from '@/types'
 import type { Product, Brand } from '@/types'
@@ -17,6 +17,11 @@ export function ProductCatalog() {
   const addItem = useCartStore((s) => s.addItem)
 
   useEffect(() => { getBrands().then((d) => setBrands(d || [])) }, [])
+
+  // Apply active promotions silently on mount — updates product discounts
+  useEffect(() => {
+    applyActivePromotions().catch(() => {})
+  }, [])
 
   useEffect(() => {
     setLoading(true)

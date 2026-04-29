@@ -1207,6 +1207,166 @@ export async function getSalesByDate(date: string) {
 
 // ─── Settings ─────────────────────────────────────────────────
 
+// ─── Promotions & Soldes ──────────────────────────────────────
+
+export async function getPromotions() {
+  const { data, error } = await supabase
+    .from('promotions')
+    .select('*')
+    .order('starts_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createPromotion(data: {
+  name:         string
+  description?: string | null
+  discount_pct: number
+  brand_ids:    string[]
+  product_ids:  string[]
+  starts_at:    string
+  ends_at:      string
+  category_names?: string[]
+  is_active:    boolean
+}) {
+  const { data: promo, error } = await supabase
+    .from('promotions')
+    .insert([data])
+    .select()
+    .single()
+  if (error) throw error
+  return promo
+}
+
+export async function updatePromotion(id: string, data: Partial<{
+  name:         string
+  description:  string | null
+  discount_pct: number
+  brand_ids:    string[]
+  product_ids:  string[]
+  starts_at:    string
+  ends_at:      string
+  category_names?: string[]
+  is_active:    boolean
+}>) {
+  const { data: promo, error } = await supabase
+    .from('promotions')
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return promo
+}
+
+export async function deletePromotion(id: string) {
+  const { error } = await supabase.from('promotions').delete().eq('id', id)
+  if (error) throw error
+}
+
+/**
+ * Applique toutes les promotions actives en ce moment :
+ * - Met à jour le champ discount sur les produits concernés
+ * - Retire le discount si la promo est expirée
+ * Retourne { applied, cleared } nombres de produits mis à jour
+ */
+export async function applyActivePromotions() {
+  const now = new Date().toISOString()
+
+  // 1. Récupérer toutes les promos actives dont la période est en cours
+  const { data: activePromos } = await supabase
+    .from('promotions')
+    .select('*')
+    .eq('is_active', true)
+    .lte('starts_at', now)
+    .gte('ends_at', now)
+
+  // 2. Récupérer tous les produits
+  const { data: allProducts } = await supabase
+    .from('products')
+    .select('id, brand_id, category, discount')
+
+  if (!allProducts) return { applied: 0, cleared: 0 }
+
+  const promos = (activePromos || []) as any[]
+  let applied = 0, cleared = 0
+
+  for (const product of allProducts as any[]) {
+    // Find the highest applicable discount for this product
+    const applicablePromos = promos.filter(p => {
+      const targetedByBrand   = p.brand_ids?.length > 0 && p.brand_ids.includes(product.brand_id)
+      const targetedByProduct  = p.product_ids?.length > 0 && p.product_ids.includes(product.id)
+      const targetedByCategory = p.category_names?.length > 0 && p.category_names.includes(product.category)
+      const targetedAll        = (!p.brand_ids || p.brand_ids.length === 0) && (!p.product_ids || p.product_ids.length === 0) && (!p.category_names || p.category_names.length === 0)
+      return targetedByBrand || targetedByProduct || targetedByCategory || targetedAll
+    })
+
+    const bestDiscount = applicablePromos.length > 0
+      ? Math.max(...applicablePromos.map((p: any) => p.discount_pct))
+      : null
+
+    if (bestDiscount !== product.discount) {
+      await supabase
+        .from('products')
+        .update({ discount: bestDiscount })
+        .eq('id', product.id)
+      if (bestDiscount !== null) applied++
+      else cleared++
+    }
+  }
+
+  // 3. Marquer les promos actives comme appliquées
+  if (promos.length > 0) {
+    await supabase
+      .from('promotions')
+      .update({ applied_at: now })
+      .in('id', promos.map((p: any) => p.id))
+  }
+
+  return { applied, cleared }
+}
+
+export async function getPromotionPreview(data: {
+  brand_ids:   string[]
+  product_ids: string[]
+  discount_pct: number
+}) {
+  // Returns the list of products that would be affected
+  let query = supabase.from('products').select('id, name, price, discount, brand_id, brand:brands(name)')
+
+  const conditions: string[] = []
+  if (data.brand_ids.length > 0 && data.product_ids.length > 0) {
+    // Either brand OR specific product
+    const { data: products } = await supabase
+      .from('products')
+      .select('id, name, price, discount, brand_id, brand:brands(name)')
+    return (products || []).filter((p: any) =>
+      data.brand_ids.includes(p.brand_id) || data.product_ids.includes(p.id)
+    )
+  }
+  if (data.brand_ids.length > 0) {
+    const { data: products } = await supabase
+      .from('products')
+      .select('id, name, price, discount, brand_id, brand:brands(name)')
+      .in('brand_id', data.brand_ids)
+    return products || []
+  }
+  if (data.product_ids.length > 0) {
+    const { data: products } = await supabase
+      .from('products')
+      .select('id, name, price, discount, brand_id, brand:brands(name)')
+      .in('id', data.product_ids)
+    return products || []
+  }
+  // All products
+  const { data: products } = await supabase
+    .from('products')
+    .select('id, name, price, discount, brand_id, brand:brands(name)')
+    .limit(20)
+  return products || []
+}
+
+
 // ─── Réservations ─────────────────────────────────────────────
 
 const RESERVATION_SELECT = `
