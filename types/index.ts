@@ -206,3 +206,36 @@ export type Return = {
   items:         Array<{ product_id: string; name: string; qty: number; unit_price: number; refund_amount: number }>
   created_at:    string
 }
+
+// ─── Reservations ─────────────────────────────────────────────
+export type ReservationItem = {
+  product_id: string
+  name:       string
+  brand:      string | null
+  qty:        number
+  unit_price: number
+  image_url:  string | null
+}
+
+export type ReservationStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'expired'
+
+export type Reservation = {
+  id:             string
+  customer_id:    string | null
+  customer_name:  string
+  customer_phone: string | null
+  items:          ReservationItem[]
+  total:          number
+  deposit:        number
+  deposit_method: 'cash' | 'card' | 'gift_card' | null
+  status:         ReservationStatus
+  reserved_until: string   // ISO date YYYY-MM-DD
+  note:           string | null
+  seller_id:      string | null
+  sale_id:        string | null
+  created_at:     string
+  updated_at:     string
+  // Joins
+  customer?:      { name: string; email?: string } | null
+  seller?:        { name: string } | null
+}

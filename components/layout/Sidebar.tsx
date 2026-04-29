@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   Monitor, Package, Users, Calendar, BarChart2, QrCode, X, Menu,
   ShoppingCart, ChevronRight, Wallet, Lock, Settings, LogOut, Layers, Boxes, Gift, CircleDollarSign,
-  Bell, AlertTriangle, Target, RotateCcw, FileDown, ArrowDownToLine,
+  Bell, AlertTriangle, Target, RotateCcw, FileDown, ArrowDownToLine, BookMarked,
 } from 'lucide-react'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -26,7 +26,8 @@ const ALL_NAV_ITEMS = [
   { href: '/planning',     label: 'Planning',     icon: Calendar,  description: 'Disponibilités boutique' },
   { href: '/objectifs',    label: 'Objectifs',    icon: Target,    description: 'Objectifs de vente' },
   { href: '/dashboard',    label: 'Dashboard',    icon: BarChart2, description: 'Analyse des ventes' },
-  { href: '/retours',      label: 'Retours',       icon: RotateCcw, description: 'Remboursements' },
+  { href: '/retours',      label: 'Retours',       icon: RotateCcw,    description: 'Remboursements' },
+  { href: '/reservations',  label: 'Réservations',  icon: BookMarked,   description: 'Mises de côté' },
   { href: '/export',         label: 'Export compta', icon: FileDown,  description: 'Export CSV comptable' },
   { href: '/cloture',      label: 'Clôture',      icon: Lock,      description: 'Clôture de caisse' },
   { href: '/parametres',   label: 'Paramètres',   icon: Settings,  description: 'Configuration boutique' },

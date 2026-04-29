@@ -1207,6 +1207,128 @@ export async function getSalesByDate(date: string) {
 
 // ─── Settings ─────────────────────────────────────────────────
 
+// ─── Réservations ─────────────────────────────────────────────
+
+const RESERVATION_SELECT = `
+  *,
+  customer:customers(name, email),
+  seller:sellers(name)
+`
+
+export async function getReservations(status?: string) {
+  let q = supabase
+    .from('reservations')
+    .select(RESERVATION_SELECT)
+    .order('reserved_until', { ascending: true })
+    .order('created_at', { ascending: false })
+  if (status) q = q.eq('status', status)
+  const { data, error } = await q
+  if (error) throw error
+  return data
+}
+
+export async function getReservation(id: string) {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(RESERVATION_SELECT)
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function createReservation(data: {
+  customer_id?:    string | null
+  customer_name:   string
+  customer_phone?: string | null
+  items:           Array<{ product_id: string; name: string; brand: string | null; qty: number; unit_price: number; image_url?: string | null }>
+  total:           number
+  deposit:         number
+  deposit_method?: 'cash' | 'card' | 'gift_card' | null
+  reserved_until:  string
+  note?:           string | null
+  seller_id?:      string | null
+}) {
+  const { data: res, error } = await supabase
+    .from('reservations')
+    .insert([{ ...data, status: 'confirmed' }])
+    .select(RESERVATION_SELECT)
+    .single()
+  if (error) throw error
+
+  // Décrémenter le stock pour les articles réservés
+  for (const item of data.items) {
+    try {
+      const { data: prod } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', item.product_id)
+        .single()
+      if (prod?.stock != null) {
+        await supabase
+          .from('products')
+          .update({ stock: Math.max(0, prod.stock - item.qty) })
+          .eq('id', item.product_id)
+      }
+    } catch { /* best-effort */ }
+  }
+
+  return res
+}
+
+export async function updateReservationStatus(id: string, status: string, extra?: { sale_id?: string }) {
+  const { data, error } = await supabase
+    .from('reservations')
+    .update({ status, ...extra })
+    .eq('id', id)
+    .select(RESERVATION_SELECT)
+    .single()
+  if (error) throw error
+
+  // Si annulé, remettre le stock
+  if (status === 'cancelled') {
+    const reservation = data as any
+    for (const item of (reservation?.items || [])) {
+      try {
+        const { data: prod } = await supabase
+          .from('products')
+          .select('stock')
+          .eq('id', item.product_id)
+          .single()
+        if (prod?.stock != null) {
+          await supabase
+            .from('products')
+            .update({ stock: prod.stock + item.qty })
+            .eq('id', item.product_id)
+        }
+      } catch { /* best-effort */ }
+    }
+  }
+  return data
+}
+
+export async function updateReservationDeposit(id: string, deposit: number, deposit_method: string) {
+  const { data, error } = await supabase
+    .from('reservations')
+    .update({ deposit, deposit_method })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getActiveReservations() {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(RESERVATION_SELECT)
+    .in('status', ['pending', 'confirmed'])
+    .order('reserved_until', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+
 // ─── Objectifs de vente ───────────────────────────────────────
 
 function getWeekStart(date: Date): Date {

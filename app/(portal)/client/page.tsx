@@ -15,8 +15,6 @@ import {
   REWARDS_TIERS,
 } from '@/lib/customerPortal'
 import type { Customer } from '@/types'
-import Image from 'next/image'
-import Logo from "@/public/images/reusable/ateli-logo.png"
 
 type View = 'loading' | 'welcome' | 'login' | 'register' | 'dashboard'
 type Tab  = 'avantage' | 'paliers' | 'historique'
@@ -43,7 +41,11 @@ function TierBadge({ tier }: { tier: (typeof REWARDS_TIERS)[number] }) {
 }
 
 // ── Sale history row ──────────────────────────────────────────
-function SaleRow({ sale }: { sale: any }) {
+const REFUND_LABELS: Record<string, string> = {
+  cash: 'Espèces', card: 'Carte', gift_card: 'Bon cadeau', store_credit: 'Avoir',
+}
+
+function SaleRow({ sale, saleReturns = [] }: { sale: any; saleReturns?: any[] }) {
   const [open, setOpen] = useState(false)
   const date = new Date(sale.created_at).toLocaleDateString('fr-FR', {
     day: 'numeric', month: 'long', year: 'numeric',
@@ -51,26 +53,41 @@ function SaleRow({ sale }: { sale: any }) {
   const time = new Date(sale.created_at).toLocaleTimeString('fr-FR', {
     hour: '2-digit', minute: '2-digit',
   })
+  const hasReturn = saleReturns.length > 0
+  const totalRefund = saleReturns.reduce((s: number, r: any) => s + r.total_refund, 0)
+
   return (
     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm">
       <button onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-4 px-4 py-4 hover:bg-gray-50 transition-colors text-left">
-        {/* Icon */}
         <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center shrink-0 text-lg">
           🛍
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-gray-900">{date}</p>
           <p className="text-xs text-gray-400">{time} · {sale.total_items} article{sale.total_items > 1 ? 's' : ''}</p>
+          {hasReturn && (
+            <p className="text-xs text-red-500 font-medium mt-0.5">
+              ↩ Retour de {totalRefund.toFixed(2)} €
+            </p>
+          )}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-sm font-black text-gray-900">{sale.total.toFixed(2)} €</p>
+          <p className={`text-sm font-black ${hasReturn ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+            {sale.total.toFixed(2)} €
+          </p>
+          {hasReturn && (
+            <p className="text-sm font-black text-green-700">
+              {Math.max(0, sale.total - totalRefund).toFixed(2)} €
+            </p>
+          )}
           <p className="text-xs text-gray-400">{open ? '▲' : '▼'}</p>
         </div>
       </button>
 
       {open && (
         <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
+          {/* Articles */}
           {(sale.items || []).length > 0 ? (
             (sale.items || []).map((item: any, i: number) => (
               <div key={i} className="flex items-center justify-between">
@@ -93,6 +110,30 @@ function SaleRow({ sale }: { sale: any }) {
             <span className="text-xs font-bold text-gray-700">Total</span>
             <span className="text-xs font-black text-gray-900">{sale.total.toFixed(2)} €</span>
           </div>
+
+          {/* Returns linked to this sale */}
+          {saleReturns.map((r: any) => (
+            <div key={r.id} className="mt-2 border-t border-red-100 pt-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-red-400 text-sm">↩</span>
+                  <p className="text-xs font-bold text-red-700">Retour</p>
+                  {r.reason && <p className="text-xs text-red-400">· {r.reason}</p>}
+                </div>
+                <p className="text-xs font-black text-red-600">-{r.total_refund.toFixed(2)} €</p>
+              </div>
+              <p className="text-[11px] text-red-400">
+                {new Date(r.created_at).toLocaleDateString('fr-FR', { day:'numeric', month:'long' })}
+                {' · '}Remboursé en {REFUND_LABELS[r.refund_method] || r.refund_method}
+              </p>
+              {(r.items || []).map((i: any, idx: number) => (
+                <div key={idx} className="flex justify-between text-[11px] text-red-400">
+                  <span>{i.name} ×{i.qty}</span>
+                  <span>-{i.refund_amount.toFixed(2)} €</span>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -160,16 +201,10 @@ export default function CustomerPortalPage() {
       {/* ── Header ── */}
       <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center sticky top-0 z-10 shadow-sm justify-center">
         <div className="flex items-center gap-2.5 justify-center">
-          
-          <div>
-            <Image
-              className="w-32 b-1 -ml-2 inline"
-              priority
-              src={Logo}
-              alt="logo"
-            />
-            
+          <div className="w-8 h-8 bg-gray-900 rounded-xl flex items-center justify-center">
+            <span className="text-white font-black text-sm">A</span>
           </div>
+          <span className="font-black text-gray-900 text-lg">Ateli</span>
         </div>
         {view === 'dashboard' && (
           <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-700 transition-colors py-1 px-2 absolute right-0">
@@ -529,7 +564,32 @@ export default function CustomerPortalPage() {
                       <p className="text-xs text-gray-400 font-medium">{data.sales.length} achat{data.sales.length > 1 ? 's' : ''}</p>
                       <p className="text-xs font-bold text-gray-700">{data.totalSpend.toFixed(2)} € au total</p>
                     </div>
-                    {data.sales.map((sale) => <SaleRow key={sale.id} sale={sale} />)}
+
+                    {/* Returns summary banner */}
+                    {(data as any).returns?.length > 0 && (
+                      <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-red-400">↩</span>
+                          <div>
+                            <p className="text-xs font-bold text-red-700">
+                              {(data as any).returns.length} retour{(data as any).returns.length > 1 ? 's' : ''} effectué{(data as any).returns.length > 1 ? 's' : ''}
+                            </p>
+                            <p className="text-[11px] text-red-400">Déjà remboursé sur ces achats</p>
+                          </div>
+                        </div>
+                        <p className="text-sm font-black text-red-600">
+                          -{(data as any).returns.reduce((s: number, r: any) => s + r.total_refund, 0).toFixed(2)} €
+                        </p>
+                      </div>
+                    )}
+
+                    {data.sales.map((sale) => (
+                      <SaleRow
+                        key={sale.id}
+                        sale={sale}
+                        saleReturns={((data as any).returns || []).filter((r: any) => r.sale_id === sale.id)}
+                      />
+                    ))}
                   </>
                 )}
               </div>
