@@ -271,21 +271,7 @@ export function Sidebar() {
 
           <Separator/>
 
-          {/* Seller profile */}
-          {!collapsed ? (
-            <div className="px-3 py-2">
-              <ProfileBlock/>
-            </div>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="px-0 py-2 cursor-default flex justify-center">
-                  <ProfileBlock compact/>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">{seller?.name} · {seller?.role}</TooltipContent>
-            </Tooltip>
-          )}
+          
 
           {/* Logout */}
           <Tooltip>

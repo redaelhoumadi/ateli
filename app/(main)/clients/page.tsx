@@ -245,7 +245,7 @@ function AddCustomerModal({ onClose, onCreated }: {
 
   return (
     <Dialog open onOpenChange={o => !o && onClose()}>
-      <DialogContent className="max-w-sm overflow-y-auto">
+      <DialogContent className="max-w-sm overflow-y-auto p-6">
         <DialogTitle className="sr-only">Nouveau client</DialogTitle>
 
         {done ? (
@@ -309,7 +309,7 @@ function AddCustomerModal({ onClose, onCreated }: {
                 <Label>Nom complet <span className="text-red-400">*</span></Label>
                 <div className="relative mt-1">
                   <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                  <Input className="pl-9" placeholder="Marie Dupont" value={form.name}
+                  <Input className="pl-4" placeholder="Marie Dupont" value={form.name}
                     onChange={e => setForm(p => ({ ...p, name: e.target.value }))} autoFocus/>
                 </div>
               </div>
@@ -318,17 +318,17 @@ function AddCustomerModal({ onClose, onCreated }: {
                 <Label>Email <span className="text-red-400">*</span></Label>
                 <div className="relative mt-1">
                   <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                  <Input className="pl-9" type="email" placeholder="marie@email.fr" value={form.email}
+                  <Input className="pl-4" type="email" placeholder="marie@email.fr" value={form.email}
                     onChange={e => setForm(p => ({ ...p, email: e.target.value }))}/>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">Un email de bienvenue sera envoyé avec le code fidélité</p>
               </div>
 
               <div>
-                <Label>Téléphone <span className="text-gray-400 font-normal">(optionnel)</span></Label>
+                <Label>Téléphone <span className="text-red-400">*</span></Label>
                 <div className="relative mt-1">
                   <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                  <Input className="pl-9" type="tel" placeholder="06 12 34 56 78" value={form.phone}
+                  <Input className="pl-4" type="tel" placeholder="06 12 34 56 78" value={form.phone}
                     onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
                     onKeyDown={e => e.key === 'Enter' && handleCreate()}/>
                 </div>
