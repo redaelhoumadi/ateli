@@ -15,7 +15,7 @@ import {
 import { useAuthStore } from '@/hooks/useAuth'
 import {
   Button, Card, CardHeader, CardTitle, CardContent,
-  Input, Label, Spinner, Badge, DatePicker,
+  Input, Label, Spinner, Badge, DatePicker, ConfirmDialog,
   Dialog, DialogContent, DialogTitle,
   TooltipProvider, Separator, cn,
 } from '@/components/ui'
@@ -52,13 +52,15 @@ function ReservationCard({ res, onUpdated }: { res: Reservation; onUpdated: () =
   const [open, setOpen]         = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [confirmCancel, setConfirmCancel]     = useState(false)
+  const [confirmComplete, setConfirmComplete] = useState(false)
   const cfg    = STATUS_CONFIG[res.status]
   const due    = daysUntil(res.reserved_until)
   const remaining = Math.max(0, res.total - res.deposit)
   const isActive  = res.status === 'confirmed' || res.status === 'pending'
 
   const handleCancel = async () => {
-    if (!confirm('Annuler cette réservation et remettre les articles en stock ?')) return
+    setConfirmCancel(false)
     setCancelling(true)
     try { await updateReservationStatus(res.id, 'cancelled'); onUpdated() }
     catch (e: any) { alert(e.message) }
@@ -66,7 +68,7 @@ function ReservationCard({ res, onUpdated }: { res: Reservation; onUpdated: () =
   }
 
   const handleComplete = async () => {
-    if (!confirm('Marquer comme encaissée ?')) return
+    setConfirmComplete(false)
     setCompleting(true)
     try { await updateReservationStatus(res.id, 'completed'); onUpdated() }
     catch (e: any) { alert(e.message) }
@@ -209,16 +211,37 @@ function ReservationCard({ res, onUpdated }: { res: Reservation; onUpdated: () =
           {/* Actions */}
           {isActive && (
             <div className="flex gap-2 pt-1">
-              <Button variant="outline" size="sm" onClick={handleCancel} disabled={cancelling}
+              <Button variant="outline" size="sm" onClick={() => setConfirmCancel(true)} disabled={cancelling}
                 className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50">
                 {cancelling ? <Spinner size="sm"/> : <><X size={13}/> Annuler</>}
               </Button>
-              <Button size="sm" onClick={handleComplete} disabled={completing}
+              <Button size="sm" onClick={() => setConfirmComplete(true)} disabled={completing}
                 className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700">
                 {completing ? <Spinner size="sm"/> : <><CheckCircle size={13}/> Marquer encaissée</>}
               </Button>
             </div>
           )}
+
+          {/* Confirm dialogs */}
+          <ConfirmDialog
+            open={confirmCancel}
+            onCancel={() => setConfirmCancel(false)}
+            onConfirm={handleCancel}
+            title="Annuler la réservation ?"
+            description="Les articles seront remis en stock. Cette action est irréversible."
+            confirmLabel="Oui, annuler"
+            cancelLabel="Garder"
+            variant="danger"
+          />
+          <ConfirmDialog
+            open={confirmComplete}
+            onCancel={() => setConfirmComplete(false)}
+            onConfirm={handleComplete}
+            title="Marquer comme encaissée ?"
+            description={`Confirmer l'encaissement de ${res.customer_name} pour ${fmt(res.total)} ?${remaining > 0 ? ` Reste à payer : ${fmt(remaining)}.` : ''}`}
+            confirmLabel="Confirmer l'encaissement"
+            cancelLabel="Annuler"
+          />
         </div>
       )}
     </div>

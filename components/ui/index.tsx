@@ -840,6 +840,57 @@ function Spinner({ size = 'md', className }: { size?: 'sm'|'md'|'lg'; className?
 }
 
 // ─── EXPORTS ─────────────────────────────────────────────────
+// ─── CONFIRM DIALOG ──────────────────────────────────────────
+// Remplace window.confirm() par un dialog Radix accessible et stylé
+function ConfirmDialog({
+  open,
+  onConfirm,
+  onCancel,
+  title       = 'Confirmer',
+  description,
+  confirmLabel = 'Confirmer',
+  cancelLabel  = 'Annuler',
+  variant      = 'default',
+}: {
+  open:          boolean
+  onConfirm:     () => void
+  onCancel:      () => void
+  title?:        string
+  description?:  string
+  confirmLabel?: string
+  cancelLabel?:  string
+  variant?:      'default' | 'danger'
+}) {
+  return (
+    <Dialog open={open} onOpenChange={o => !o && onCancel()}>
+      <DialogContent className="max-w-sm p-0 overflow-hidden" hideClose>
+        <DialogTitle className="sr-only">{title}</DialogTitle>
+        <div className="px-6 py-5 space-y-1">
+          <p className="text-base font-black text-gray-900">{title}</p>
+          {description && <p className="text-sm text-gray-500">{description}</p>}
+        </div>
+        <div className="flex gap-2 px-6 pb-5">
+          <button
+            onClick={onCancel}
+            className="flex-1 h-10 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+            {cancelLabel}
+          </button>
+          <button
+            onClick={onConfirm}
+            className={cn(
+              'flex-1 h-10 rounded-xl text-sm font-bold text-white transition-colors',
+              variant === 'danger'
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-gray-900 hover:bg-black'
+            )}>
+            {confirmLabel}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export {
   // Button
   Button, buttonVariants,
@@ -873,7 +924,7 @@ export {
   // Popover
   Popover, PopoverTrigger, PopoverContent,
   // Composite
-  StatCard, EmptyState, Spinner, DatePicker,
+  StatCard, EmptyState, Spinner, DatePicker, ConfirmDialog,
   // Utils
   cn,
 }
