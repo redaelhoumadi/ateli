@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import {
   getReservations, createReservation, updateReservationStatus,
-  getProducts, getCustomers,
+  getProducts, getCustomers, createSale,
 } from '@/lib/supabase'
 import { useAuthStore } from '@/hooks/useAuth'
 import {
@@ -48,12 +48,212 @@ function daysUntil(dateStr: string) {
 }
 
 // ─── Reservation card ─────────────────────────────────────────
+// ─── Reservation checkout modal ───────────────────────────────
+const PAY_METHODS_LIST = [
+  { id: 'card',      label: 'Carte',      icon: '💳' },
+  { id: 'cash',      label: 'Espèces',    icon: '💵' },
+  { id: 'mixed',     label: 'Mixte',      icon: '🔀' },
+  { id: 'gift_card', label: 'Bon cadeau', icon: '🎁' },
+]
+
+function ReservationCheckoutModal({ res, onClose, onSuccess }: {
+  res: Reservation
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const { seller } = useAuthStore()
+  const remaining = Math.max(0, res.total - res.deposit)
+
+  const [payMethod, setPayMethod] = useState('card')
+  const [cash, setCash]           = useState('')
+  const [mixedCard, setMixedCard] = useState('')
+  const [mixedCash, setMixedCash] = useState('')
+  const [saving, setSaving]       = useState(false)
+  const [error, setError]         = useState('')
+
+  const cashNum      = Number(cash) || 0
+  const cashChange   = Math.max(0, cashNum - remaining)
+  const mixedCardNum = Math.max(0, Number(mixedCard) || 0)
+  const mixedCashNum = Math.max(0, Number(mixedCash) || 0)
+  const mixedTotal   = mixedCardNum + mixedCashNum
+  const mixedChange  = Math.max(0, mixedCashNum - Math.max(0, remaining - mixedCardNum))
+  const mixedOk      = mixedTotal >= remaining - 0.005
+
+  const canConfirm = remaining === 0
+    || payMethod === 'card'
+    || payMethod === 'gift_card'
+    || (payMethod === 'cash' && cashNum >= remaining)
+    || (payMethod === 'mixed' && mixedOk)
+
+  const handleConfirm = async () => {
+    setSaving(true); setError('')
+    try {
+      const finalMethod = remaining === 0 ? (res.deposit_method || 'card') : payMethod
+
+      const sale = await createSale({
+        customer_id:    res.customer_id,
+        seller_id:      seller?.id ?? '',
+        total:          res.total,
+        total_items:    (res.items || []).reduce((s, i) => s + i.qty, 0),
+        points_earned:  Math.floor(res.total),
+        points_used:    0,
+        payment_method: finalMethod,
+        note: `Réservation #${res.id.replace(/-/g,'').slice(0,8).toUpperCase()}${res.note ? ` · ${res.note}` : ''}`,
+        items: (res.items || []).map(i => ({
+          product_id:  i.product_id,
+          quantity:    i.qty,
+          unit_price:  i.unit_price,
+          total_price: i.qty * i.unit_price,
+        })),
+      })
+
+      await updateReservationStatus(res.id, 'completed', { sale_id: sale.id })
+      onSuccess()
+    } catch (e: any) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent className="max-w-sm p-0 overflow-hidden" hideClose>
+        <DialogTitle className="sr-only">Encaisser la réservation</DialogTitle>
+
+        {/* Header */}
+        <div className="px-5 py-4 bg-gray-900 text-white">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-black">Encaisser la réservation</p>
+            <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={16}/></button>
+          </div>
+          <p className="text-xs text-gray-400">{res.customer_name} · #{res.id.replace(/-/g,'').slice(0,8).toUpperCase()}</p>
+        </div>
+
+        <div className="px-5 py-5 space-y-4">
+          {/* Articles */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">
+            {(res.items || []).map((item, i) => (
+              <div key={i} className="flex justify-between items-center px-4 py-2.5">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                  <p className="text-xs text-gray-400">×{item.qty} · {item.unit_price.toFixed(2)} €</p>
+                </div>
+                <p className="text-sm font-bold text-gray-900">{(item.qty * item.unit_price).toFixed(2)} €</p>
+              </div>
+            ))}
+            <div className="px-4 py-2.5 flex justify-between font-black bg-white text-sm">
+              <span>Total</span><span>{res.total.toFixed(2)} €</span>
+            </div>
+          </div>
+
+          {/* Deposit recap */}
+          {res.deposit > 0 && (
+            <div className="flex justify-between items-center bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+              <div>
+                <p className="text-xs font-bold text-indigo-700">Acompte versé</p>
+                {res.deposit_method && <p className="text-xs text-indigo-400">{PAY_METHODS_LIST.find(m => m.id === res.deposit_method)?.label}</p>}
+              </div>
+              <p className="text-base font-black text-indigo-700">-{res.deposit.toFixed(2)} €</p>
+            </div>
+          )}
+
+          {/* Remaining */}
+          <div className="text-center py-1">
+            <p className="text-xs text-gray-500 mb-1">Reste à encaisser</p>
+            <p className="text-4xl font-black text-gray-900">{remaining.toFixed(2)} €</p>
+          </div>
+
+          {remaining === 0 ? (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-center">
+              <p className="text-sm font-bold text-green-700">✓ Entièrement réglé via l'acompte</p>
+            </div>
+          ) : (
+            <>
+              {/* Payment method */}
+              <div className="grid grid-cols-2 gap-2">
+                {PAY_METHODS_LIST.map(m => (
+                  <button key={m.id} onClick={() => setPayMethod(m.id)}
+                    className={cn('py-2.5 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-1.5',
+                      payMethod === m.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400')}>
+                    {m.icon} {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Cash */}
+              {payMethod === 'cash' && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500">Montant remis</p>
+                  <div className="relative">
+                    <input type="number" min={remaining} step="0.01" placeholder={remaining.toFixed(2)}
+                      value={cash} onChange={e => setCash(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-xl font-black pr-8 focus:outline-none focus:ring-2 focus:ring-gray-900"/>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">€</span>
+                  </div>
+                  {cashNum >= remaining && cashChange > 0.005 && (
+                    <div className="flex justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-2.5">
+                      <span className="text-sm font-semibold text-gray-700">Rendu monnaie</span>
+                      <span className="text-lg font-black text-green-700">{cashChange.toFixed(2)} €</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Mixed */}
+              {payMethod === 'mixed' && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">💳 Carte</label>
+                      <div className="relative">
+                        <input type="number" min="0" step="0.01" value={mixedCard}
+                          onChange={e => { setMixedCard(e.target.value); setMixedCash('') }}
+                          placeholder="0.00"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold pr-7 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">€</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">💵 Espèces</label>
+                      <div className="relative">
+                        <input type="number" min="0" step="0.01" value={mixedCash}
+                          onChange={e => setMixedCash(e.target.value)}
+                          placeholder={mixedCard ? Math.max(0, remaining - mixedCardNum).toFixed(2) : '0.00'}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold pr-7 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">€</span>
+                      </div>
+                    </div>
+                  </div>
+                  {mixedOk && mixedChange > 0.005 && (
+                    <div className="flex justify-between bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">
+                      <span className="text-sm font-semibold text-gray-700">Rendu monnaie</span>
+                      <span className="text-sm font-black text-green-700">{mixedChange.toFixed(2)} €</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" onClick={onClose} disabled={saving} className="flex-1">Annuler</Button>
+            <Button onClick={handleConfirm} disabled={saving || !canConfirm}
+              className="flex-1 gap-2 bg-green-600 hover:bg-green-700">
+              {saving ? <Spinner size="sm"/> : <><CheckCircle size={14}/> Confirmer</>}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Reservation card ─────────────────────────────────────────
 function ReservationCard({ res, onUpdated }: { res: Reservation; onUpdated: () => void }) {
   const [open, setOpen]         = useState(false)
   const [cancelling, setCancelling] = useState(false)
-  const [completing, setCompleting] = useState(false)
-  const [confirmCancel, setConfirmCancel]     = useState(false)
-  const [confirmComplete, setConfirmComplete] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [showCheckout, setShowCheckout]   = useState(false)
   const cfg    = STATUS_CONFIG[res.status]
   const due    = daysUntil(res.reserved_until)
   const remaining = Math.max(0, res.total - res.deposit)
@@ -65,14 +265,6 @@ function ReservationCard({ res, onUpdated }: { res: Reservation; onUpdated: () =
     try { await updateReservationStatus(res.id, 'cancelled'); onUpdated() }
     catch (e: any) { alert(e.message) }
     finally { setCancelling(false) }
-  }
-
-  const handleComplete = async () => {
-    setConfirmComplete(false)
-    setCompleting(true)
-    try { await updateReservationStatus(res.id, 'completed'); onUpdated() }
-    catch (e: any) { alert(e.message) }
-    finally { setCompleting(false) }
   }
 
   return (
@@ -215,14 +407,17 @@ function ReservationCard({ res, onUpdated }: { res: Reservation; onUpdated: () =
                 className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50">
                 {cancelling ? <Spinner size="sm"/> : <><X size={13}/> Annuler</>}
               </Button>
-              <Button size="sm" onClick={() => setConfirmComplete(true)} disabled={completing}
+              <Button size="sm" onClick={() => setShowCheckout(true)}
                 className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700">
-                {completing ? <Spinner size="sm"/> : <><CheckCircle size={13}/> Marquer encaissée</>}
+                <CheckCircle size={13}/>
+                {remaining > 0
+                  ? `Encaisser ${remaining.toFixed(2)} €`
+                  : 'Marquer remis'}
               </Button>
             </div>
           )}
 
-          {/* Confirm dialogs */}
+          {/* Cancel confirm dialog */}
           <ConfirmDialog
             open={confirmCancel}
             onCancel={() => setConfirmCancel(false)}
@@ -233,16 +428,16 @@ function ReservationCard({ res, onUpdated }: { res: Reservation; onUpdated: () =
             cancelLabel="Garder"
             variant="danger"
           />
-          <ConfirmDialog
-            open={confirmComplete}
-            onCancel={() => setConfirmComplete(false)}
-            onConfirm={handleComplete}
-            title="Marquer comme encaissée ?"
-            description={`Confirmer l'encaissement de ${res.customer_name} pour ${fmt(res.total)} ?${remaining > 0 ? ` Reste à payer : ${fmt(remaining)}.` : ''}`}
-            confirmLabel="Confirmer l'encaissement"
-            cancelLabel="Annuler"
-          />
         </div>
+      )}
+
+      {/* Checkout modal */}
+      {showCheckout && (
+        <ReservationCheckoutModal
+          res={res}
+          onClose={() => setShowCheckout(false)}
+          onSuccess={() => { setShowCheckout(false); setOpen(false); onUpdated() }}
+        />
       )}
     </div>
   )

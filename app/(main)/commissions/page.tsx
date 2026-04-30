@@ -8,7 +8,7 @@ import {
   ChevronUp, ChevronDown, AlertCircle, CheckCircle, Info,
 } from 'lucide-react'
 import {
-  getBrands, getBrandStats, updateBrandFull, getSettings,
+  getAllBrands, getBrandStats, updateBrandFull, getSettings,
 } from '@/lib/supabase'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
@@ -229,7 +229,7 @@ export default function CommissionsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [b, s, cfg] = await Promise.all([getBrands(), getBrandStats(), getSettings()])
+      const [b, s, cfg] = await Promise.all([getAllBrands(), getBrandStats(), getSettings()])
       setBrands((b as Brand[]) || [])
       setStats((s as BrandStats[]) || [])
       setSettings(cfg || {})

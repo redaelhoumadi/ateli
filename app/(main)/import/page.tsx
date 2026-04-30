@@ -14,7 +14,7 @@ import {
   downloadCsvTemplate, generateCsvTemplate,
   type ParsedProduct, type ImportResult,
 } from '@/lib/csvImport'
-import { getBrands, getAllProducts } from '@/lib/supabase'
+import { getAllBrands, getAllProducts } from '@/lib/supabase'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
   Separator, Spinner, TooltipProvider, cn,
@@ -76,7 +76,7 @@ export default function ImportPage() {
       }
 
       // Load brands and existing products in parallel
-      const [brandsData, prodsData] = await Promise.all([getBrands(), getAllProducts()])
+      const [brandsData, prodsData] = await Promise.all([getAllBrands(), getAllProducts()])
       const brandsArr = (brandsData as Brand[]) || []
       const prodsArr  = (prodsData as any[]) || []
 

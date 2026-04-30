@@ -17,6 +17,8 @@ import { useAuthStore, ROLE_ROUTES } from '@/hooks/useAuth'
 
 const ALL_NAV_ITEMS = [
   { href: '/pos',          label: 'Caisse POS',   icon: Monitor,   description: 'Interface de caisse' },
+  { href: '/reservations',  label: 'Réservations',  icon: BookMarked,   description: 'Mises de côté' },
+  { href: '/retours',      label: 'Retours',       icon: RotateCcw,    description: 'Remboursements' },
   { href: '/produits',     label: 'Produits',     icon: Package,   description: 'Catalogue & stocks' },
   { href: '/clients',      label: 'Clients',      icon: Users,     description: 'Programme fidélité' },
   { href: '/bons-cadeaux',  label: 'Bons cadeaux',  icon: Gift,             description: 'Créer et gérer les bons' },
@@ -26,8 +28,6 @@ const ALL_NAV_ITEMS = [
   { href: '/planning',     label: 'Planning',     icon: Calendar,  description: 'Disponibilités boutique' },
   { href: '/objectifs',    label: 'Objectifs',    icon: Target,    description: 'Objectifs de vente' },
   { href: '/dashboard',    label: 'Dashboard',    icon: BarChart2, description: 'Analyse des ventes' },
-  { href: '/retours',      label: 'Retours',       icon: RotateCcw,    description: 'Remboursements' },
-  { href: '/reservations',  label: 'Réservations',  icon: BookMarked,   description: 'Mises de côté' },
   { href: '/promotions',    label: 'Promotions',    icon: Percent,      description: 'Remises & soldes' },
   { href: '/export',         label: 'Export compta', icon: FileDown,  description: 'Export CSV comptable' },
   { href: '/cloture',      label: 'Clôture',      icon: Lock,      description: 'Clôture de caisse' },

@@ -9,7 +9,7 @@ import {
   Calendar, BadgeEuro,
 } from 'lucide-react'
 import {
-  getBrandStats, getBrands, updateBrandSettings,
+  getBrandStats, getAllBrands, updateBrandSettings,
   getReversements, createReversement, markReversementPaid, deleteReversement,
 } from '@/lib/supabase'
 import {
@@ -380,7 +380,7 @@ export default function RevergementsPage() {
     try {
       const [s, b, r] = await Promise.all([
         getBrandStats(from || undefined, to || undefined),
-        getBrands(),
+        getAllBrands(),
         getReversements(),
       ])
       setStats(s as BrandStats[])

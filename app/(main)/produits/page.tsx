@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Plus, Tag, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload } from 'lucide-react'
 import {
-  getAllProducts, getBrands, createProduct, updateProduct,
+  getAllProducts, getAllBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
   uploadProductImage, deleteProductImage, updateStock,
 } from '@/lib/supabase'
@@ -57,7 +57,7 @@ export default function ProduitsPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, b] = await Promise.all([getAllProducts(), getBrands()])
+      const [p, b] = await Promise.all([getAllProducts(), getAllBrands()])
       setProducts((p as Product[]) || [])
       setBrands((b as Brand[]) || [])
     } finally { setLoading(false) }

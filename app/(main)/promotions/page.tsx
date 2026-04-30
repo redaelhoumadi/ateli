@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, Tag, Zap, CheckCircle, X, Pencil, Trash2, Play, Pause, ChevronDown, ChevronUp } from 'lucide-react'
-import { getPromotions, createPromotion, updatePromotion, deletePromotion, applyActivePromotions, getBrands, getProducts } from '@/lib/supabase'
+import { getPromotions, createPromotion, updatePromotion, deletePromotion, applyActivePromotions, getAllBrands, getProducts } from '@/lib/supabase'
 import { Button, Input, Label, Spinner, DatePicker, Dialog, DialogContent, DialogTitle, ConfirmDialog, TooltipProvider, Separator, cn } from '@/components/ui'
 import type { Promotion, Brand, Product } from '@/types'
 
@@ -271,7 +271,7 @@ export default function PromotionsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, b, pr] = await Promise.all([getPromotions(), getBrands(), getProducts()])
+      const [p, b, pr] = await Promise.all([getPromotions(), getAllBrands(), getProducts()])
       setPromos((p as Promotion[]) || [])
       setBrands((b as Brand[]) || [])
       setProducts((pr as Product[]) || [])

@@ -9,7 +9,7 @@ import {
   ChevronRight, ExternalLink, Instagram, Globe,
   CheckCircle, AlertCircle,
 } from 'lucide-react'
-import { getBrands, getBrandStats, createBrand } from '@/lib/supabase'
+import { getAllBrands, getBrandStats, createBrand } from '@/lib/supabase'
 import {
   Button, Badge, Card, Input, StatCard, Spinner, EmptyState,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
@@ -38,7 +38,7 @@ export default function MarquesPage() {
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    Promise.all([getBrands(), getBrandStats()])
+    Promise.all([getAllBrands(), getBrandStats()])
       .then(([b, s]) => {
         setBrands((b as Brand[]) || [])
         setStats((s as BrandStats[]) || [])

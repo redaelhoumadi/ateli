@@ -28,9 +28,10 @@ export const supabase = (() => {
 
 // Pour le catalogue POS — uniquement les produits actifs
 export async function getProducts(brandId?: string) {
+  // Exclure les produits inactifs ET les produits des marques inactives
   let query = supabase
     .from('products')
-    .select('*, brand:brands(id, name)')
+    .select('*, brand:brands(id, name, is_active)')
     .neq('is_active', false)
     .order('name')
 
@@ -40,7 +41,9 @@ export async function getProducts(brandId?: string) {
 
   const { data, error } = await query
   if (error) throw error
-  return data
+
+  // Filtrer côté app les produits dont la marque est inactive
+  return (data || []).filter((p: any) => p.brand?.is_active !== false)
 }
 
 // Pour la page admin produits — tous les produits (actifs + archivés)
@@ -57,7 +60,7 @@ export async function getAllProducts() {
 export async function searchProducts(term: string, brandId?: string) {
   let query = supabase
     .from('products')
-    .select('*, brand:brands(id, name)')
+    .select('*, brand:brands(id, name, is_active)')
     .neq('is_active', false)
     .or(`name.ilike.%${term}%,reference.ilike.%${term}%`)
     .order('name')
@@ -72,12 +75,20 @@ export async function searchProducts(term: string, brandId?: string) {
 }
 
 // ─── Brands ──────────────────────────────────────────────────
-export async function getBrands() {
+export async function getBrands(activeOnly = true) {
+  let q = supabase.from('brands').select('*').order('name')
+  if (activeOnly) q = q.eq('is_active', true)
+  const { data, error } = await q
+  if (error) throw error
+  return data
+}
+
+// Admin: toutes les marques y compris inactives
+export async function getAllBrands() {
   const { data, error } = await supabase
     .from('brands')
     .select('*')
     .order('name')
-
   if (error) throw error
   return data
 }
@@ -714,13 +725,15 @@ export async function getLowStockProducts() {
   // Produits actifs avec stock défini et stock <= stock_min
   const { data, error } = await supabase
     .from('products')
-    .select('*, brand:brands(id, name)')
+    .select('*, brand:brands(id, name, is_active)')
     .not('stock', 'is', null)
     .neq('is_active', false)
     .order('stock', { ascending: true })
   if (error) throw error
-  // Filter client-side since Supabase can't do column comparisons directly
-  return (data || []).filter((p: any) => p.stock <= (p.stock_min ?? 3))
+  // Filter client-side: exclude inactive brands + stock > stock_min
+  return (data || [])
+    .filter((p: any) => p.brand?.is_active !== false)
+    .filter((p: any) => p.stock <= (p.stock_min ?? 3))
 }
 
 export async function checkStockAvailability(items: Array<{ product_id: string; quantity: number }>) {
@@ -1284,7 +1297,7 @@ export async function applyActivePromotions() {
   // 2. Récupérer tous les produits
   const { data: allProducts } = await supabase
     .from('products')
-    .select('id, brand_id, category, discount')
+    .select('id, brand_id, category, discount, brand:brands(is_active)')
 
   if (!allProducts) return { applied: 0, cleared: 0 }
 
@@ -1292,6 +1305,9 @@ export async function applyActivePromotions() {
   let applied = 0, cleared = 0
 
   for (const product of allProducts as any[]) {
+    // Skip products of inactive brands
+    if ((product as any).brand?.is_active === false) continue
+
     // Find the highest applicable discount for this product
     const applicablePromos = promos.filter(p => {
       const targetedByBrand   = p.brand_ids?.length > 0 && p.brand_ids.includes(product.brand_id)
