@@ -1367,6 +1367,45 @@ export async function getPromotionPreview(data: {
 }
 
 
+// ─── Planning ─────────────────────────────────────────────────
+
+export async function getPlanningWeek(weekKey: string) {
+  const { data, error } = await supabase
+    .from('planning')
+    .select('*')
+    .eq('week_key', weekKey)
+  if (error) throw error
+  return data || []
+}
+
+export async function savePlanningSlot(data: {
+  week_key:     string
+  day_index:    number
+  creator_id:   string
+  slot_id:      string
+  custom_start?: number | null
+  custom_end?:   number | null
+}) {
+  const { error } = await supabase
+    .from('planning')
+    .upsert([{ ...data, updated_at: new Date().toISOString() }], {
+      onConflict: 'week_key,day_index,creator_id',
+    })
+  if (error) throw error
+}
+
+export async function getPlanningWeekKeys() {
+  const { data, error } = await supabase
+    .from('planning')
+    .select('week_key')
+    .order('week_key', { ascending: false })
+  if (error) throw error
+  // Deduplicate
+  const keys = [...new Set((data || []).map((r: any) => r.week_key))]
+  return keys
+}
+
+
 // ─── Réservations ─────────────────────────────────────────────
 
 const RESERVATION_SELECT = `
