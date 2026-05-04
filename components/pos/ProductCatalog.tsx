@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { Search } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
 import { getProducts, getBrands, searchProducts, applyActivePromotions } from '@/lib/supabase'
+import { cacheProducts, cacheBrands, getCachedProducts, getCachedBrands } from '@/lib/offlineDB'
+import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { Input, Badge, Spinner, cn } from '@/components/ui'
 import { getStockStatus } from '@/types'
 import type { Product, Brand } from '@/types'
@@ -11,12 +13,23 @@ import type { Product, Brand } from '@/types'
 export function ProductCatalog() {
   const [products, setProducts]       = useState<Product[]>([])
   const [brands, setBrands]           = useState<Brand[]>([])
+  const { isOnline }                  = useOfflineSync()
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [search, setSearch]           = useState('')
   const [loading, setLoading]         = useState(false)
   const addItem = useCartStore((s) => s.addItem)
 
-  useEffect(() => { getBrands().then((d) => setBrands(d || [])) }, [])
+  useEffect(() => {
+    if (navigator.onLine) {
+      getBrands().then(d => {
+        const list = (d || []) as Brand[]
+        setBrands(list)
+        cacheBrands(list).catch(() => {})
+      })
+    } else {
+      getCachedBrands().then(d => setBrands((d || []) as Brand[]))
+    }
+  }, [isOnline])
 
   // Apply active promotions silently on mount — updates product discounts
   useEffect(() => {
@@ -29,8 +42,11 @@ export function ProductCatalog() {
       try {
         const data = search.trim()
           ? await searchProducts(search, selectedBrand || undefined)
-          : await getProducts(selectedBrand || undefined)
+          : (navigator.onLine ? await getProducts(selectedBrand || undefined) : (await getCachedProducts()).filter((p:any) => !selectedBrand || p.brand_id === selectedBrand))
         setProducts(data || [])
+        if (navigator.onLine && !search.trim() && !selectedBrand) {
+          cacheProducts(data || []).catch(() => {})
+        }
       } finally { setLoading(false) }
     }, 200)
     return () => clearTimeout(t)

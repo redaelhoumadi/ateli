@@ -4,6 +4,8 @@ import { useState, useMemo } from 'react'
 import { CreditCard, Banknote, Shuffle, X, Gift, CheckCircle } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
 import { createSale, checkStockAvailability, getGiftCardByCode, useGiftCard } from '@/lib/supabase'
+import { addPendingSale, generateOfflineId } from '@/lib/offlineDB'
+import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { getTierForSpend } from '@/lib/customerPortal'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -39,6 +41,7 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   } = useCartStore()
 
   const { clearSavedCart } = useOfflineCart()
+  const { isOnline, refreshCount } = useOfflineSync()
 
   const [cash, setCash]           = useState('')
   const [discount, setDiscount]   = useState('')
@@ -92,18 +95,59 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
     if (!sellerId) { setError('Sélectionnez un vendeur'); return }
     setLoading(true); setError('')
     try {
-      // Vérifier le stock avant d'encaisser
-      const stockIssues = await checkStockAvailability(
-        items.map(i => ({ product_id: i.product.id, quantity: i.quantity }))
-      )
-      if (stockIssues.length > 0) {
-        const msg = stockIssues.map(s =>
-          `• ${s.name} : ${s.available} en stock, ${s.requested} demandé${s.requested > 1 ? 's' : ''}`
-        ).join('\n')
-        setError(`Stock insuffisant :\n${msg}`)
-        setLoading(false)
+      if (isOnline) {
+        // Vérifier le stock avant d'encaisser (online seulement)
+        const stockIssues = await checkStockAvailability(
+          items.map(i => ({ product_id: i.product.id, quantity: i.quantity }))
+        )
+        if (stockIssues.length > 0) {
+          const msg = stockIssues.map(s =>
+            `• ${s.name} : ${s.available} en stock, ${s.requested} demandé${s.requested > 1 ? 's' : ''}`
+          ).join('\n')
+          setError(`Stock insuffisant :\n${msg}`)
+          setLoading(false)
+          return
+        }
+      }
+
+      if (!isOnline) {
+        // ── MODE HORS LIGNE : stocker en file d'attente IndexedDB ──
+        const offlineId = generateOfflineId()
+        await addPendingSale({
+          id:             offlineId,
+          created_at:     new Date().toISOString(),
+          seller_id:      sellerId,
+          seller_name:    '',
+          customer_id:    customer?.id ?? null,
+          customer_name:  customer?.name ?? null,
+          total:          tot,
+          total_items:    totalItems(),
+          payment_method: paymentMethod,
+          note:           note.trim() || null,
+          items: items.map(i => ({
+            product_id:  i.product.id,
+            name:        i.product.name,
+            brand_name:  (i.product as any).brand?.name ?? null,
+            quantity:    i.quantity,
+            unit_price:  i.unit_price,
+            total_price: i.total_price,
+          })),
+          synced:     false,
+          sync_error: null,
+        })
+        await refreshCount()
+        clearCart(); clearSavedCart()
+        // Créer une vente fictive pour le ticket
+        const fakeSale = {
+          id: offlineId, created_at: new Date().toISOString(),
+          total: tot, total_items: totalItems(),
+          payment_method: paymentMethod, items,
+        }
+        onSuccess(fakeSale as any)
         return
       }
+
+      // ── MODE EN LIGNE ──
       const sale = await createSale({
         customer_id: customer?.id ?? null, seller_id: sellerId,
         total: tot, total_items: totalItems(),

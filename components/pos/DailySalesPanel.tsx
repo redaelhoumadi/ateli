@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, RefreshCw, TrendingUp, ShoppingCart, Trash2, ChevronDown, ChevronUp, CreditCard, Banknote, Shuffle, AlertTriangle } from 'lucide-react'
+import { X, RefreshCw, TrendingUp, ShoppingCart, Trash2, ChevronDown, ChevronUp, CreditCard, Banknote, Shuffle, AlertTriangle, WifiOff, Clock } from 'lucide-react'
 import { getTodaySales, cancelSale } from '@/lib/supabase'
+import { getPendingSales, type PendingSale } from '@/lib/offlineDB'
+import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { Button, Badge, Separator, ScrollArea, Spinner, cn } from '@/components/ui'
 
 type SaleItem = { quantity: number; unit_price: number; total_price: number; product?: { name: string; brand?: { name: string } } }
@@ -150,16 +152,22 @@ export function DailySalesPanel({ sellerId, onClose, newSale }: Props) {
   const [sales, setSales]       = useState<Sale[]>([])
   const [loading, setLoading]   = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [filterAll, setFilterAll]   = useState(true) // all sellers or current seller
+  const [filterAll, setFilterAll]   = useState(true)
+  const [pendingSales, setPendingSales] = useState<PendingSale[]>([])
+  const { isOnline, pendingCount, sync, syncStatus } = useOfflineSync()
 
   const load = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true)
     else setLoading(true)
     try {
-      const data = await getTodaySales(filterAll ? undefined : sellerId)
+      const [data, pending] = await Promise.all([
+        isOnline ? getTodaySales(filterAll ? undefined : sellerId) : Promise.resolve([]),
+        getPendingSales().catch(() => []),
+      ])
       setSales((data as Sale[]) || [])
+      setPendingSales(pending.filter(s => !s.synced))
     } finally { setLoading(false); setRefreshing(false) }
-  }, [sellerId, filterAll])
+  }, [sellerId, filterAll, isOnline])
 
   useEffect(() => { load() }, [load])
 
@@ -214,6 +222,49 @@ export function DailySalesPanel({ sellerId, onClose, newSale }: Props) {
           <p className="text-base font-black text-gray-900">{totalItems}</p>
         </div>
       </div>
+
+      {/* Pending offline sales */}
+      {pendingSales.length > 0 && (
+        <div className="px-4 py-3 border-b border-amber-100 bg-amber-50 shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <WifiOff size={13} className="text-amber-600"/>
+              <p className="text-xs font-bold text-amber-800">
+                {pendingSales.length} vente{pendingSales.length > 1 ? 's' : ''} hors ligne en attente
+              </p>
+            </div>
+            {isOnline && (
+              <button onClick={sync} disabled={syncStatus === 'syncing'}
+                className="flex items-center gap-1 text-xs font-bold text-amber-700 hover:text-amber-900 transition-colors">
+                <RefreshCw size={11} className={syncStatus === 'syncing' ? 'animate-spin' : ''}/>
+                {syncStatus === 'syncing' ? 'Sync…' : 'Sync maintenant'}
+              </button>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            {pendingSales.slice(0, 3).map(s => (
+              <div key={s.id} className="flex items-center justify-between bg-white border border-amber-100 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Clock size={11} className="text-amber-500 shrink-0"/>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-900 truncate">
+                      {s.customer_name || 'Client anonyme'}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {new Date(s.created_at).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}
+                      {s.sync_error && <span className="text-red-500 ml-1">· Erreur</span>}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs font-black text-amber-700 shrink-0">{s.total.toFixed(2)} €</p>
+              </div>
+            ))}
+            {pendingSales.length > 3 && (
+              <p className="text-[10px] text-amber-600 text-center">+{pendingSales.length - 3} autre{pendingSales.length - 3 > 1 ? 's' : ''}…</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Payment breakdown */}
       {Object.keys(byPayment).length > 0 && (
