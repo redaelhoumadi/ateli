@@ -301,7 +301,7 @@ export function DailySalesPanel({ sellerId, onClose, newSale }: Props) {
 
       {/* Sales list */}
       <ScrollArea className="flex-1">
-        <div className="px-3 py-3 space-y-2 w-[92%]">
+        <div className="px-3 py-3 space-y-2">
           {loading ? (
             <div className="flex justify-center py-10"><Spinner size="md"/></div>
           ) : sales.length === 0 ? (
