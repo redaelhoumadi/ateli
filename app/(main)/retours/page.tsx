@@ -7,7 +7,7 @@ import {
   Search, RotateCcw, CheckCircle, AlertTriangle, X,
   Clock, Package, ChevronDown, ChevronUp,
 } from 'lucide-react'
-import { getSalesStats, getSaleWithItems, createReturn, getAllReturns, getReturnsBySale } from '@/lib/supabase'
+import { getSalesStats, getSaleWithItems, createReturn, getAllReturns, getReturnsBySale, addCustomerCredit } from '@/lib/supabase'
 import { useAuthStore } from '@/hooks/useAuth'
 import {
   Button, Card, CardHeader, CardTitle, CardContent,
@@ -181,12 +181,26 @@ function NewReturnForm({ onCreated }: { onCreated: () => void }) {
       const items = Array.from(selectedItems.entries()).map(([pid, v]) => ({
         product_id: pid, name: v.name, qty: v.qty, unit_price: v.unit_price, refund_amount: v.qty * v.unit_price,
       }))
+      const finalReason = (reason === 'Autre' ? customReason : reason) || null
       const ret = await createReturn({
         sale_id: sale.id, seller_id: seller?.id ?? null,
-        reason: (reason === 'Autre' ? customReason : reason) || null,
+        reason: finalReason,
         refund_method: refundMethod as any,
         total_refund: Math.round(totalRefund * 100) / 100, items,
       })
+
+      // Si remboursement en avoir : créditer le solde client
+      if (refundMethod === 'store_credit' && sale.customer_id) {
+        await addCustomerCredit({
+          customer_id:  sale.customer_id,
+          amount:       Math.round(totalRefund * 100) / 100,
+          type:         'refund',
+          reference_id: ret.id,
+          note:         `Avoir suite retour — ${finalReason || 'retour'}`,
+          seller_id:    seller?.id ?? null,
+        })
+      }
+
       setDone(ret); onCreated()
     } catch (e: any) { setError(e.message) }
     finally { setSaving(false) }

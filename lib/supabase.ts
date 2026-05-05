@@ -1544,6 +1544,71 @@ export async function getActiveReservations() {
 }
 
 
+// ─── Avoir / Crédit boutique ──────────────────────────────────
+
+export async function getCustomerCredit(customerId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('customers')
+    .select('credit_balance')
+    .eq('id', customerId)
+    .single()
+  if (error) throw error
+  return (data as any).credit_balance ?? 0
+}
+
+export async function addCustomerCredit(data: {
+  customer_id:  string
+  amount:       number                                      // montant positif
+  type:         'refund' | 'manual' | 'used' | 'expired'
+  reference_id?: string | null
+  note?:        string | null
+  seller_id?:   string | null
+}) {
+  const delta = data.type === 'used' || data.type === 'expired' ? -Math.abs(data.amount) : Math.abs(data.amount)
+
+  // 1. Update customer balance (atomic with check)
+  const { data: customer, error: fetchErr } = await supabase
+    .from('customers')
+    .select('credit_balance')
+    .eq('id', data.customer_id)
+    .single()
+  if (fetchErr) throw fetchErr
+
+  const newBalance = Math.max(0, ((customer as any).credit_balance ?? 0) + delta)
+  const { error: updateErr } = await supabase
+    .from('customers')
+    .update({ credit_balance: newBalance })
+    .eq('id', data.customer_id)
+  if (updateErr) throw updateErr
+
+  // 2. Record transaction
+  const { error: txErr } = await supabase
+    .from('credit_transactions')
+    .insert([{
+      customer_id:  data.customer_id,
+      amount:       delta,
+      type:         data.type,
+      reference_id: data.reference_id ?? null,
+      note:         data.note ?? null,
+      seller_id:    data.seller_id ?? null,
+    }])
+  if (txErr) throw txErr
+
+  return newBalance
+}
+
+export async function getCreditTransactions(customerId: string) {
+  const { data, error } = await supabase
+    .from('credit_transactions')
+    .select('*, seller:sellers(name)')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return data || []
+}
+
+
 // ─── Objectifs de vente ───────────────────────────────────────
 
 function getWeekStart(date: Date): Date {

@@ -6,11 +6,11 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Download, ChevronUp, ChevronDown, Users, TrendingUp, Tag, ShoppingBag,
   X, Save, Phone, Mail, MapPin, Instagram, StickyNote, Cake, ShoppingCart, Edit2,
-  UserPlus, Plus, CheckCircle as CheckCircleIcon, Link2,
+  UserPlus, Plus, CheckCircle as CheckCircleIcon, Link2, Wallet, PlusCircle,
 } from 'lucide-react'
 import { getCustomersWithSpend, registerCustomer } from '@/lib/customerPortal'
 import { REWARDS_TIERS } from '@/lib/customerPortal'
-import { getCustomerSales, updateCustomerProfile, getTodaySalesWithoutCustomer, attachCustomerToSale, getCustomerReturns } from '@/lib/supabase'
+import { getCustomerSales, updateCustomerProfile, getTodaySalesWithoutCustomer, attachCustomerToSale, getCustomerReturns, getCreditTransactions, addCustomerCredit } from '@/lib/supabase'
 import {
   Button, Card, Input, Label, StatCard, EmptyState, Spinner,
   Dialog, DialogContent, DialogTitle,
@@ -357,10 +357,15 @@ function AddCustomerModal({ onClose, onCreated }: {
 function CustomerModal({ c: init, onClose, onSaved, onAttachSale }: {
   c: C; onClose: ()=>void; onSaved: (u: Partial<C>)=>void; onAttachSale: ()=>void }) {
   const [c, setC]       = useState(init)
-  const [tab, setTab]   = useState<'info'|'achats'|'notes'>('info')
+  const [tab, setTab]   = useState<'info'|'achats'|'avoir'|'notes'>('info')
   const [editing, setEditing] = useState(false)
   const [sales, setSales]     = useState<any[]>([])
   const [returns, setReturns] = useState<any[]>([])
+  const [credits, setCredits] = useState<any[]>([])
+  const [addingCredit, setAddingCredit] = useState(false)
+  const [creditAmount, setCreditAmount] = useState('')
+  const [creditNote, setCreditNote]     = useState('')
+  const [creditSaving, setCreditSaving] = useState(false)
   const [loadingSales, setLoadingSales] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [err, setErr]         = useState('')
@@ -395,7 +400,10 @@ function CustomerModal({ c: init, onClose, onSaved, onAttachSale }: {
         setReturns((r as any[]) || [])
       }).finally(() => setLoadingSales(false))
     }
-  }, [tab, c.id, sales.length])
+    if (tab === 'avoir' && credits.length === 0) {
+      getCreditTransactions(c.id).then(d => setCredits((d as any[]) || []))
+    }
+  }, [tab, c.id, sales.length, credits.length])
 
   const { tier, nextTier, totalSpend } = c
   return (
@@ -424,7 +432,7 @@ function CustomerModal({ c: init, onClose, onSaved, onAttachSale }: {
           </div>
         </div>
         <div className="flex border-b border-gray-100 shrink-0 bg-white">
-          {[{id:'info',l:'👤 Profil'},{id:'achats',l:'🛍 Achats'},{id:'notes',l:'📝 Notes'}].map(t => (
+          {[{id:'info',l:'👤 Profil'},{id:'achats',l:'🛍 Achats'},{id:'avoir',l:'🏪 Avoir'},{id:'notes',l:'📝 Notes'}].map(t => (
             <button key={t.id} onClick={() => setTab(t.id as any)} className={cn('flex-1 py-3 text-xs font-semibold border-b-2 transition-all', tab===t.id?'border-gray-900 text-gray-900':'border-transparent text-gray-400 hover:text-gray-700')}>{t.l}</button>
           ))}
         </div>
@@ -566,6 +574,55 @@ function CustomerModal({ c: init, onClose, onSaved, onAttachSale }: {
                       </div>
                     )
                   })}
+                </div>
+              )}
+            </div>
+          )}
+          {tab === 'avoir' && (
+            <div className="p-5 space-y-4">
+              <div className={cn('rounded-2xl p-5 text-center border', (c as any).credit_balance > 0 ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100')}>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Solde avoir</p>
+                <p className={cn('text-5xl font-black', (c as any).credit_balance > 0 ? 'text-green-700' : 'text-gray-400')}>
+                  {((c as any).credit_balance ?? 0).toFixed(2)} €
+                </p>
+                {(c as any).credit_balance > 0 && <p className="text-xs text-green-600 mt-2 font-medium">Utilisable en caisse — mode "Avoir"</p>}
+              </div>
+              {addingCredit ? (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 space-y-3">
+                  <p className="text-xs font-bold text-indigo-800">Ajouter un avoir manuellement</p>
+                  <div className="relative"><Input type="number" min="0.01" step="0.01" placeholder="Montant" value={creditAmount} onChange={e=>setCreditAmount(e.target.value)} className="pr-8 text-xl font-black" autoFocus/><span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">€</span></div>
+                  <Input placeholder="Motif (ex: geste commercial, échange…)" value={creditNote} onChange={e=>setCreditNote(e.target.value)}/>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => {setAddingCredit(false);setCreditAmount('');setCreditNote('')}}>Annuler</Button>
+                    <Button size="sm" disabled={!creditAmount || creditSaving} onClick={async () => {
+                      if (!creditAmount) return; setCreditSaving(true)
+                      try { const nb = await addCustomerCredit({customer_id:c.id,amount:Number(creditAmount),type:'manual',note:creditNote||null}); onSaved({credit_balance:nb} as any); setCredits([]); setAddingCredit(false); setCreditAmount(''); setCreditNote('') } catch {} finally { setCreditSaving(false) }
+                    }} className="flex-1 gap-1.5">{creditSaving?<Spinner size="sm"/>:<><PlusCircle size={13}/> Créditer</>}</Button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={()=>setAddingCredit(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-sm font-semibold text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition-all">
+                  <PlusCircle size={15}/> Ajouter un avoir manuellement
+                </button>
+              )}
+              {credits.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Historique</p>
+                  <div className="space-y-1.5">
+                    {credits.map((tx:any) => {
+                      const TC:Record<string,{color:string}> = {refund:{color:'#2563eb'},manual:{color:'#7c3aed'},used:{color:'#dc2626'},expired:{color:'#9ca3af'}}
+                      const cfg = TC[tx.type]||{color:'#9ca3af'}; const isD = tx.amount < 0
+                      return (
+                        <div key={tx.id} className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-black shrink-0" style={{background:cfg.color}}>{tx.type[0].toUpperCase()}</div>
+                            <div className="min-w-0"><p className="text-xs font-semibold text-gray-900 truncate">{tx.note||tx.type}</p><p className="text-[10px] text-gray-400">{new Date(tx.created_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</p></div>
+                          </div>
+                          <p className={cn('text-sm font-black shrink-0 ml-2',isD?'text-red-600':'text-green-600')}>{isD?'':'+' }{tx.amount.toFixed(2)} €</p>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </div>

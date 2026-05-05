@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { CreditCard, Banknote, Shuffle, X, Gift, CheckCircle } from 'lucide-react'
+import { CreditCard, Banknote, Shuffle, X, Gift, CheckCircle, AlertTriangle, Wallet } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
-import { createSale, checkStockAvailability, getGiftCardByCode, useGiftCard } from '@/lib/supabase'
+import { createSale, checkStockAvailability, getGiftCardByCode, useGiftCard, addCustomerCredit } from '@/lib/supabase'
 import { addPendingSale, generateOfflineId } from '@/lib/offlineDB'
 import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { getTierForSpend } from '@/lib/customerPortal'
@@ -18,6 +18,7 @@ const METHODS = [
   { id: 'cash',       label: 'Espèces',     Icon: Banknote },
   { id: 'mixed',      label: 'Mixte',       Icon: Shuffle },
   { id: 'gift_card',  label: 'Bon cadeau',  Icon: Gift },
+  { id: 'store_credit', label: 'Avoir',       Icon: Wallet },
 ]
 const QUICK = [5, 10, 20, 50, 100, 200]
 
@@ -72,6 +73,9 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   const mixedTotal   = mixedCardNum + mixedCashNum
   const mixedChange  = Math.max(0, mixedCashNum - Math.max(0, tot - mixedCardNum))
   const mixedOk      = mixedTotal >= tot - 0.005
+  // Store credit (avoir)
+  const creditBalance    = customer ? ((customer as any).credit_balance ?? 0) : 0
+  const creditSufficient = creditBalance >= tot - 0.005
 
   // Group items by brand for the recap
   const brandGroups = useMemo(() => {
@@ -158,6 +162,17 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
       // If paid by gift card, debit it
       if (paymentMethod === 'gift_card' && gcData) {
         await useGiftCard({ gift_card_id: gcData.id, sale_id: (sale as any).id, amount: tot })
+      }
+      // If paid by store credit (avoir), debit it
+      if (paymentMethod === 'store_credit' && customer?.id) {
+        await addCustomerCredit({
+          customer_id:  customer.id,
+          amount:       tot,
+          type:         'used',
+          reference_id: (sale as any).id,
+          note:         `Avoir utilisé en caisse — vente ${(sale as any).id.replace(/-/g,'').slice(0,8).toUpperCase()}`,
+          seller_id:    sellerId || null,
+        })
       }
       clearCart(); clearSavedCart(); onSuccess(sale as Sale)
     } catch (e: any) { setError(e.message || 'Erreur') }
@@ -380,6 +395,47 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
               </div>
             )}
 
+            {/* Store credit (avoir) */}
+            {paymentMethod === 'store_credit' && (
+              <div className={cn('rounded-xl p-4 border space-y-2',
+                !customer ? 'bg-gray-50 border-gray-200' :
+                creditSufficient ? 'bg-green-50 border-green-200' :
+                'bg-amber-50 border-amber-200')}>
+                {!customer ? (
+                  <p className="text-sm text-gray-500 text-center">
+                    Sélectionnez un client pour utiliser son avoir
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {creditSufficient
+                          ? <CheckCircle size={16} className="text-green-500"/>
+                          : <AlertTriangle size={16} className="text-amber-500"/>}
+                        <p className="text-sm font-bold text-gray-900">{customer.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-black" style={{ color: creditSufficient ? '#15803D' : '#B45309' }}>
+                          {creditBalance.toFixed(2)} €
+                        </p>
+                        <p className="text-xs text-gray-400">avoir disponible</p>
+                      </div>
+                    </div>
+                    {creditSufficient ? (
+                      <div className="bg-white border border-green-100 rounded-xl px-4 py-2.5 flex justify-between text-sm">
+                        <span className="text-gray-600">Après encaissement</span>
+                        <span className="font-black text-gray-900">{(creditBalance - tot).toFixed(2)} € restants</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-amber-700 font-medium">
+                        Avoir insuffisant — manque {(tot - creditBalance).toFixed(2)} €
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Note */}
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Note (optionnel)</p>
@@ -474,7 +530,11 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
 
         <DialogFooter className="px-6 py-4 border-t border-gray-100">
           <Button variant="outline" onClick={onClose} disabled={loading}>Annuler</Button>
-          <Button size="lg" onClick={confirm} disabled={loading} className="flex-1 text-base font-black">
+          <Button size="lg" onClick={confirm} disabled={loading
+            || (paymentMethod === 'gift_card' && (!gcData || !gcSufficient))
+            || (paymentMethod === 'mixed' && !mixedOk)
+            || (paymentMethod === 'store_credit' && (!customer || !creditSufficient))
+          } className="flex-1 text-base font-black">
             {loading ? <><Spinner size="sm" /> Traitement…</> : `✓  Encaisser  ${tot.toFixed(2)} €`}
           </Button>
         </DialogFooter>

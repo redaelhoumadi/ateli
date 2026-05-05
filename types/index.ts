@@ -79,9 +79,10 @@ export type Customer = {
   notes:     string | null
   birthday:  string | null
   address:   string | null
-  instagram: string | null
-  tags:      string[]
-  created_at: string
+  instagram:      string | null
+  tags:           string[]
+  credit_balance: number
+  created_at:     string
 }
 
 export type Seller = {
@@ -129,7 +130,7 @@ export type CartItem = {
   total_price: number
 }
 
-export type PaymentMethod = 'cash' | 'card' | 'points' | 'mixed' | 'gift_card'
+export type PaymentMethod = 'cash' | 'card' | 'points' | 'mixed' | 'gift_card' | 'store_credit'
 
 export type Cloture = {
   id: string
@@ -268,3 +269,15 @@ export function getPromotionStatus(promo: Promotion): PromotionStatus {
 }
 
 // ─── Promotions ────────────────────────────────────────────────
+
+// ─── Store credit ──────────────────────────────────────────────
+export type CreditTransaction = {
+  id:           string
+  customer_id:  string
+  amount:       number
+  type:         'refund' | 'manual' | 'used' | 'expired'
+  reference_id: string | null
+  note:         string | null
+  seller_id:    string | null
+  created_at:   string
+}
