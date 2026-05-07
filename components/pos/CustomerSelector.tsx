@@ -134,9 +134,9 @@ export function CustomerSelector() {
           </div>
         </div>
         <Button variant="outline" size="md" onClick={() => setShowCreate(true)}
-          className="gap-1.5 shrink-0 px-2.5 sm:px-4">
+          className="gap-1.5 shrink-0 px-2.5 sm:px-4 h-auto">
           <UserPlus size={15} />
-          <span className="hidden sm:inline">Nouveau</span>
+          <span className="hidden sm:inline">Ajouter un nouveau client</span>
         </Button>
       </div>
 

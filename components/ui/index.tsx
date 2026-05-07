@@ -127,7 +127,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, icon, error, ...props }, ref) => (
-    <div className="relative">
+    <div className="relative  w-full">
       {icon && (
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
           {icon}

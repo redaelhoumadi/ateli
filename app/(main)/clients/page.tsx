@@ -691,7 +691,7 @@ export default function ClientsPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+        <div className="mx-auto px-6 py-8 space-y-6">
           <div className="flex items-center justify-between">
             <div><h1 className="text-2xl font-bold text-gray-900">Clients</h1><p className="text-gray-500 text-sm mt-0.5">{customers.length} membres</p></div>
             <div className="flex gap-2">
@@ -701,7 +701,7 @@ export default function ClientsPage() {
               <Button variant="outline" onClick={exportCSV} className="gap-1.5"><Download size={14}/><span className="hidden sm:inline">Exporter CSV</span></Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 lg:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:gap-4">
             <StatCard label="Total membres" value={customers.length} icon={<Users size={18}/>}/>
             <StatCard label="CA cumulé" value={`${totalSpend.toFixed(0)} €`} icon={<TrendingUp size={18}/>}/>
             <StatCard label="Avec remise" value={withDisc} icon={<Tag size={18}/>}/>

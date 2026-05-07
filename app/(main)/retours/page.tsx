@@ -230,7 +230,7 @@ function NewReturnForm({ onCreated }: { onCreated: () => void }) {
           <div className="flex gap-2">
             <Input placeholder="Ex: A3F8C1E2" value={search} onChange={e => setSearch(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && handleSearch()} className="font-mono uppercase tracking-wider"/>
-            <Button onClick={handleSearch} disabled={searching || !search.trim()} className="gap-2 shrink-0">
+            <Button onClick={handleSearch} disabled={searching || !search.trim()} className="gap-2 h-auto shrink-0">
               {searching ? <Spinner size="sm"/> : <Search size={14}/>} Chercher
             </Button>
           </div>
@@ -413,7 +413,7 @@ export default function RetoursPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+        <div className="mx-auto px-6 py-8 space-y-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Retours & Remboursements</h1>
             <p className="text-gray-500 text-sm mt-0.5">Créez des retours et consultez l'historique complet</p>
@@ -421,8 +421,8 @@ export default function RetoursPage() {
 
           <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1.5 w-fit">
             {([
-              { id: 'nouveau',     label: '↩ Nouveau retour' },
-              { id: 'historique',  label: '🕐 Historique' },
+              { id: 'nouveau',     label: 'Nouveau retour' },
+              { id: 'historique',  label: 'Historique' },
             ] as const).map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={cn('px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2',

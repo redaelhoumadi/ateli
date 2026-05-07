@@ -55,7 +55,7 @@ function FieldEdit({ label, value, onChange, type = 'text', placeholder = '', pr
         {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{prefix}</span>}
         <Input type={type} value={value} onChange={e => onChange(e.target.value)}
           placeholder={placeholder} disabled={disabled}
-          className={prefix ? 'pl-9' : ''}/>
+          className={prefix ? 'pl-4' : ''}/>
       </div>
       {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
     </div>
@@ -238,7 +238,7 @@ export default function BrandDetailPage() {
         {/* ── Hero banner ── */}
         <div className="h-2 w-full" style={{ background: catColor }}/>
         <div className="bg-white border-b border-gray-100 px-6 py-5">
-          <div className="max-w-5xl mx-auto">
+          <div className=" mx-auto">
             {/* Back + save */}
             <div className="flex items-center justify-between mb-5">
               <Button variant="ghost" size="sm" onClick={() => router.push('/marques')} className="gap-1.5 text-gray-500">
@@ -340,10 +340,10 @@ export default function BrandDetailPage() {
           </div>
         </div>
 
-        <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
+        <div className=" mx-auto px-6 py-6 space-y-6">
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1.5 w-fit overflow-x-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-white border border-gray-100 rounded-2xl p-1.5 sm:w-fit overflow-x-auto">
             {TABS.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id as any)}
                 className={cn('px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all',

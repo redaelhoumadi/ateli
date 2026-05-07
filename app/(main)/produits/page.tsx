@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Tag, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload } from 'lucide-react'
+import { Search, Plus, Tag, Euro, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload } from 'lucide-react'
 import {
   getAllProducts, getAllBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
@@ -245,39 +245,52 @@ export default function ProduitsPage() {
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
             <StatCard label="Produits actifs"  value={activeCount}              icon={<Package size={18}/>}/>
             <StatCard label="Archivés"          value={archivedCount}            icon={<Archive size={18}/>}/>
-            <StatCard label="Prix moyen"        value={`${avgPrice.toFixed(2)} €`} icon={<span className="text-base">💶</span>}/>
+            <StatCard label="Prix moyen"        value={`${avgPrice.toFixed(2)} €`} icon={<Euro size={18}/>}/>
             <StatCard label="En promotion"      value={withDiscount}             icon={<Tag size={18}/>}/>
           </div>
 
           {/* Filters */}
-          <div className="flex flex-row gap-2 sm:gap-3">
-            <Input icon={<Search size={14}/>} placeholder="Nom, référence ou marque…" value={search} onChange={e => setSearch(e.target.value)} className="flex-1"/>
-            <Select onValueChange={v => setFilterBrand(v === 'all' ? '' : v)} value={filterBrand || 'all'}>
-              <SelectTrigger className="w-fit!"><SelectValue placeholder="Toutes les marques"/></SelectTrigger>
+            <div className='grid xl:grid-cols-2  gap-3 lg:gap-4'>
+              <div>
+                <Input icon={<Search size={14}/>} placeholder="Nom, référence ou marque…" value={search} onChange={e => setSearch(e.target.value)} className="flex-1"/>
+              </div>
+              <div className='col-span-1'>
+                <div className='grid sm:grid-cols-3 grid-cols-1 gap-4'>
+                  <Select onValueChange={v => setFilterBrand(v === 'all' ? '' : v)} value={filterBrand || 'all'}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Toutes les marques"/></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes les marques</SelectItem>
                 {brands.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button variant={showArchived ? 'default' : 'outline'} onClick={() => { setShowArchived(!showArchived); clearSel() }}>
+            <Button className='sm:h-auto' variant={showArchived ? 'default' : 'outline'} onClick={() => { setShowArchived(!showArchived); clearSel() }}>
               <Archive size={14}/> {showArchived ? 'Archivés' : 'Voir archivés'}
             </Button>
-          </div>
-
-          {/* Global bulk */}
+             {/* Global bulk */}
           <div className="flex items-center gap-3">
             {!showArchived && activeCount > 0 && (
-              <Button variant="outline" size="sm" onClick={archiveAll} disabled={bulkLoading}>
+              <Button className=' w-full sm:h-full border-red-200 hover:border-red-500 text-red-400' variant="outline" size="sm" onClick={archiveAll} disabled={bulkLoading}>
                 <Archive size={13}/> Tout archiver ({activeCount})
               </Button>
             )}
             {showArchived && archivedCount > 0 && (
-              <Button variant="outline" size="sm" onClick={restoreAll} disabled={bulkLoading} className="text-green-700 border-green-200 hover:border-green-500">
+              <Button variant="outline" size="sm" onClick={restoreAll} disabled={bulkLoading} className=" w-full h-full text-green-700 border-green-200 hover:border-green-500">
                 <RotateCcw size={13}/> Tout désarchiver ({archivedCount})
               </Button>
             )}
             {bulkLoading && <div className="flex items-center gap-2 text-xs text-gray-400"><Spinner size="sm"/> Traitement…</div>}
           </div>
+            </div>
+                
+              </div>
+              
+              </div>
+            
+            
+            
+
+
+         
 
           {/* Selection bar */}
           <div className={cn('overflow-hidden transition-all duration-200', someSel ? 'max-h-16' : 'max-h-0')}>

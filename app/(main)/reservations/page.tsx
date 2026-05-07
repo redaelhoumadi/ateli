@@ -795,7 +795,7 @@ export default function ReservationsPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+        <div className=" mx-auto px-6 py-8 space-y-6">
 
           {/* Header */}
           <div className="flex items-center justify-between gap-4">
@@ -829,7 +829,7 @@ export default function ReservationsPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1.5">
               {[
-                { id: 'active', label: '🟢 En cours' },
+                { id: 'active', label: 'En cours' },
                 { id: 'done',   label: '✓ Terminées' },
               ].map(t => (
                 <button key={t.id} onClick={() => setFilter(t.id)}
@@ -841,7 +841,7 @@ export default function ReservationsPage() {
             </div>
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-              <Input placeholder="Nom, téléphone ou N° réservation…" className="pl-9"
+              <Input placeholder="Nom, téléphone ou N° réservation…" className="pl-9 py-3.5"
                 value={search} onChange={e => setSearch(e.target.value)}/>
             </div>
           </div>
