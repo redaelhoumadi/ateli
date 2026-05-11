@@ -299,7 +299,7 @@ export default function PromotionsPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+        <div className="mx-auto px-6 py-8 space-y-6">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div><h1 className="text-2xl font-bold text-gray-900">Promotions & Soldes</h1><p className="text-gray-500 text-sm mt-0.5">Remises par période, marque ou catégorie</p></div>
             <div className="flex gap-2">
