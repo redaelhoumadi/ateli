@@ -3,7 +3,8 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
-import { QrCode, ShoppingBag, History } from 'lucide-react'
+import { QrCode, ShoppingBag, History, ScanLine } from 'lucide-react'
+import { BarcodeScanner }        from '@/components/pos/BarcodeScanner'
 import { ProductCatalog }    from '@/components/pos/ProductCatalog'
 import { Cart }              from '@/components/pos/Cart'
 import { CustomerSelector }  from '@/components/pos/CustomerSelector'
@@ -24,6 +25,7 @@ import type { Sale } from '@/types'
 
 export default function POSPage() {
   const [showCheckout, setShowCheckout]   = useState(false)
+  const [showScanner, setShowScanner]       = useState(false)
   const [completedSale, setCompletedSale] = useState<Sale | null>(null)
   const [showQR, setShowQR]               = useState(false)
   const [cartOpen, setCartOpen]           = useState(false)
@@ -84,6 +86,19 @@ export default function POSPage() {
 
           {/* Right actions — icônes uniquement */}
           <div className="flex items-center gap-1 shrink-0 ml-auto">
+
+            {/* Scanner code-barres */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setShowScanner(true)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors shrink-0"
+                >
+                  <ScanLine size={17}/>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Scanner un code-barres</TooltipContent>
+            </Tooltip>
 
             {/* QR Fidélité */}
             <Tooltip>
@@ -250,6 +265,7 @@ export default function POSPage() {
         </Dialog>
 
       </div>
+    {showScanner && <BarcodeScanner onClose={() => setShowScanner(false)}/>}
     </TooltipProvider>
   )
 }

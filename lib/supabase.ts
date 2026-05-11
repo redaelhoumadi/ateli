@@ -57,6 +57,23 @@ export async function getAllProducts() {
   return data
 }
 
+export async function getProductByBarcode(barcode: string) {
+  // Cherche par référence exacte (insensible à la casse) ou EAN/barcode
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, brand:brands(id, name, is_active)')
+    .or(`reference.ilike.${barcode},barcode.ilike.${barcode}`)
+    .neq('is_active', false)
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  // Exclure les produits de marques inactives
+  if ((data as any).brand?.is_active === false) return null
+  return data
+}
+
+
 export async function searchProducts(term: string, brandId?: string) {
   let query = supabase
     .from('products')
