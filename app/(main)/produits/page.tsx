@@ -4,7 +4,8 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Tag, Euro, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload } from 'lucide-react'
+import { generateEAN13, renderEAN13SVG, validateEAN13 } from '@/lib/barcode'
+import { Search, Plus, Tag, Euro, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload, Printer, RefreshCw } from 'lucide-react'
 import {
   getAllProducts, getAllBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
@@ -24,9 +25,43 @@ import type { Product, Brand } from '@/types'
 type ProductForm = {
   name: string; reference: string; price: string
   discount: string; brand_id: string; image_url: string | null
-  stock: string; stock_min: string
+  stock: string; stock_min: string; barcode: string
 }
-const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null, stock: '', stock_min: '3' }
+const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null, stock: '', stock_min: '3', barcode: '' }
+
+// ─── Print barcode label ──────────────────────────────────────
+function printBarcode(code: string, productName: string, reference: string) {
+  const svg = renderEAN13SVG(code, { width: 260, height: 80, fontSize: 11 })
+  if (!svg) return
+
+  const w = window.open('', '_blank', 'width=400,height=300')
+  if (!w) return
+
+  w.document.write(`<!DOCTYPE html><html><head>
+<meta charset="UTF-8"><title>Étiquette — ${productName}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: monospace; background: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  .label { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; text-align: center; width: 300px; }
+  .product-name { font-size: 13px; font-weight: bold; color: #111; margin-bottom: 4px; }
+  .reference { font-size: 10px; color: #666; margin-bottom: 8px; }
+  svg { display: block; margin: 0 auto; }
+  @media print {
+    body { display: block; }
+    .label { border: none; padding: 4px; }
+    @page { margin: 4mm; size: 70mm 40mm; }
+  }
+</style>
+</head><body>
+<div class="label">
+  <p class="product-name">${productName.slice(0, 30)}</p>
+  <p class="reference">Réf: ${reference}</p>
+  ${svg}
+</div>
+<script>setTimeout(() => { window.print(); window.close() }, 400)</script>
+</body></html>`)
+  w.document.close()
+}
 
 export default function ProduitsPage() {
   const router = useRouter()
@@ -133,7 +168,7 @@ export default function ProduitsPage() {
 
   // CRUD
   const openAdd  = () => { setForm({ ...emptyForm, brand_id: brands[0]?.id || '' }); setError(''); setModal('add') }
-  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3' }); setError(''); setModal('edit') }
+  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '' }); setError(''); setModal('edit') }
   const openDelete = (p: Product) => { setDeleteTarget(p); setDeleteMode(null); setError(''); setModal('delete') }
   const closeModal = () => { setModal(null); setEditTarget(null); setDeleteTarget(null); setError('') }
 
@@ -154,7 +189,10 @@ export default function ProduitsPage() {
     setSaving(true); setError('')
     try {
       const stockVal = form.stock !== '' && !isNaN(Number(form.stock)) ? Number(form.stock) : null
-      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url, stock: stockVal, stock_min: form.stock_min !== '' ? Number(form.stock_min) : 3 }
+      // Générer un EAN-13 si aucun barcode et que c'est une création
+      const barcodeVal = form.barcode.trim()
+        || (modal === 'add' ? generateEAN13(form.brand_id, form.reference.trim()) : '')
+      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url, stock: stockVal, stock_min: form.stock_min !== '' ? Number(form.stock_min) : 3, barcode: barcodeVal || null }
       if (modal === 'add') {
         const created = await createProduct(payload)
         setProducts(prev => [...prev, created as Product].sort((a,b) => a.name.localeCompare(b.name)))
@@ -375,6 +413,14 @@ export default function ProduitsPage() {
                         </td>
                         <td className="px-4 py-3.5">
                           <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">{p.reference}</span>
+                          {(p as any).barcode && (
+                            <button
+                              onClick={e => { e.stopPropagation(); printBarcode((p as any).barcode, p.name, p.reference) }}
+                              className="text-xs font-semibold text-indigo-500 hover:text-indigo-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
+                              title="Imprimer étiquette code-barres">
+                              <Printer size={11}/> Code-barres
+                            </button>
+                          )}
                         </td>
                         <td className="px-4 py-3.5">
                           <Badge variant="info" size="sm">{p.brand?.name}</Badge>
@@ -507,6 +553,59 @@ export default function ProduitsPage() {
             <div className="space-y-4">
               <div><Label>Nom <span className="text-red-400">*</span></Label><Input placeholder="ex. T-shirt oversize" value={form.name} onChange={e => setForm({...form, name: e.target.value})}/></div>
               <div><Label>Référence <span className="text-red-400">*</span></Label><Input placeholder="TSH-001" value={form.reference} onChange={e => setForm({...form, reference: e.target.value.toUpperCase()})} className="font-mono uppercase"/></div>
+
+              {/* ── Barcode ── */}
+              <div className="space-y-2">
+                <Label>Code-barres EAN-13</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Laissez vide pour générer automatiquement"
+                    value={form.barcode}
+                    onChange={e => setForm({...form, barcode: e.target.value.replace(/\D/g,'').slice(0,13)})}
+                    className="font-mono flex-1"
+                    maxLength={13}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!form.brand_id || !form.reference.trim()) return
+                      setForm({...form, barcode: generateEAN13(form.brand_id, form.reference.trim())})
+                    }}
+                    disabled={!form.brand_id || !form.reference.trim()}
+                    title="Générer un nouveau code"
+                    className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition-all shrink-0">
+                    <RefreshCw size={14}/>
+                  </button>
+                </div>
+
+                {/* Barcode preview */}
+                {(form.barcode.length === 13 || (modal === 'add' && form.brand_id && form.reference)) && (() => {
+                  const code = form.barcode.length === 13
+                    ? form.barcode
+                    : form.brand_id && form.reference ? generateEAN13(form.brand_id, form.reference) : ''
+                  if (!code) return null
+                  const svg = renderEAN13SVG(code, { width: 240, height: 60, fontSize: 10 })
+                  if (!svg) return null
+                  return (
+                    <div className="border border-gray-100 rounded-xl p-4 bg-gray-50 flex flex-col items-center gap-3">
+                      <div dangerouslySetInnerHTML={{ __html: svg }} className="rounded-lg overflow-hidden bg-white shadow-sm"/>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 font-mono">{code}</span>
+                        {validateEAN13(code) ? (
+                          <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">✓ Valide</span>
+                        ) : (
+                          <span className="text-xs font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">⚠ Invalide</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => printBarcode(code, form.name || 'Produit', form.reference || '')}
+                          className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
+                          <Printer size={12}/> Imprimer étiquette
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}</div>
               <div>
                 <Label>Marque <span className="text-red-400">*</span></Label>
                 <div className="flex gap-2">
