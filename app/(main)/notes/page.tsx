@@ -7,7 +7,7 @@ import {
   Plus, X, CheckCircle, Trash2, Pencil, Filter,
   AlertTriangle, Info, DollarSign, CheckSquare, Clock, Search,
 } from 'lucide-react'
-import { getNotes, createNote, resolveNote, deleteNote, updateNote, getAllBrands } from '@/lib/supabase'
+import { getNotes, createNote, resolveNote, deleteNote, updateNote, getBrands } from '@/lib/supabase'
 import { useAuthStore } from '@/hooks/useAuth'
 import { Button, Input, Spinner, ConfirmDialog, cn } from '@/components/ui'
 
@@ -242,7 +242,7 @@ export default function NotesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [n, b] = await Promise.all([getNotes(), getAllBrands()])
+      const [n, b] = await Promise.all([getNotes(), getBrands()])
       setNotes(n as Note[])
       setBrands(b as any[])
     } finally { setLoading(false) }
@@ -298,7 +298,7 @@ export default function NotesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className=" mx-auto px-4 py-6 space-y-5">
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-3">

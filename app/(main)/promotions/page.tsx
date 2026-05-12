@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, Tag, Zap, CheckCircle, X, Pencil, Trash2, Play, Pause, ChevronDown, ChevronUp } from 'lucide-react'
-import { getPromotions, createPromotion, updatePromotion, deletePromotion, applyActivePromotions, getAllBrands, getProducts } from '@/lib/supabase'
+import { getPromotions, createPromotion, updatePromotion, deletePromotion, applyActivePromotions, getBrands, getProducts } from '@/lib/supabase'
 import { Button, Input, Label, Spinner, DatePicker, Dialog, DialogContent, DialogTitle, ConfirmDialog, TooltipProvider, Separator, cn } from '@/components/ui'
 import type { Promotion, Brand, Product } from '@/types'
 
@@ -271,7 +271,7 @@ export default function PromotionsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, b, pr] = await Promise.all([getPromotions(), getAllBrands(), getProducts()])
+      const [p, b, pr] = await Promise.all([getPromotions(), getBrands(), getProducts()])
       setPromos((p as Promotion[]) || [])
       setBrands((b as Brand[]) || [])
       setProducts((pr as Product[]) || [])
@@ -299,7 +299,7 @@ export default function PromotionsPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div><h1 className="text-2xl font-bold text-gray-900">Promotions & Soldes</h1><p className="text-gray-500 text-sm mt-0.5">Remises par période, marque ou catégorie</p></div>
             <div className="flex gap-2">

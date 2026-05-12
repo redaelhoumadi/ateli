@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { generateEAN13, renderEAN13SVG, validateEAN13 } from '@/lib/barcode'
 import { Search, Plus, Tag, Euro, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload, Printer, RefreshCw } from 'lucide-react'
 import {
-  getAllProducts, getAllBrands, createProduct, updateProduct,
+  getAllProducts, getBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
   uploadProductImage, deleteProductImage, updateStock,
 } from '@/lib/supabase'
@@ -92,7 +92,7 @@ export default function ProduitsPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, b] = await Promise.all([getAllProducts(), getAllBrands()])
+      const [p, b] = await Promise.all([getAllProducts(), getBrands()])
       setProducts((p as Product[]) || [])
       setBrands((b as Brand[]) || [])
     } finally { setLoading(false) }
