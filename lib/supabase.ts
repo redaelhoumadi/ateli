@@ -1626,6 +1626,67 @@ export async function getCreditTransactions(customerId: string) {
 }
 
 
+// ─── Notes équipe ─────────────────────────────────────────────
+
+export async function getNotes(filters?: { brand_id?: string; resolved?: boolean; type?: string }) {
+  let q = supabase
+    .from('notes')
+    .select('*, brand:brands(id, name)')
+    .order('created_at', { ascending: false })
+
+  if (filters?.brand_id)              q = q.eq('brand_id', filters.brand_id)
+  if (filters?.resolved !== undefined) q = q.eq('resolved', filters.resolved)
+  if (filters?.type)                  q = q.eq('type', filters.type)
+
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function createNote(data: {
+  content:    string
+  type:       'info' | 'finance' | 'urgent' | 'task'
+  brand_id?:  string | null
+  seller_id?: string | null
+  seller_name?: string | null
+}) {
+  const { data: note, error } = await supabase
+    .from('notes')
+    .insert([{ ...data, resolved: false }])
+    .select('*, brand:brands(id, name)')
+    .single()
+  if (error) throw error
+  return note
+}
+
+export async function resolveNote(id: string, resolvedBy: string) {
+  const { data, error } = await supabase
+    .from('notes')
+    .update({ resolved: true, resolved_by: resolvedBy, resolved_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteNote(id: string) {
+  const { error } = await supabase.from('notes').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function updateNote(id: string, data: { content?: string; type?: string; brand_id?: string | null }) {
+  const { data: note, error } = await supabase
+    .from('notes')
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*, brand:brands(id, name)')
+    .single()
+  if (error) throw error
+  return note
+}
+
+
 // ─── Objectifs de vente ───────────────────────────────────────
 
 function getWeekStart(date: Date): Date {
