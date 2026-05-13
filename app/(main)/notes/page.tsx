@@ -298,7 +298,7 @@ export default function NotesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      <div className=" mx-auto px-4 py-6 space-y-5">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
