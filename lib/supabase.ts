@@ -797,19 +797,87 @@ const BUCKET = 'product-images'
 
 export function getProductImageUrl(path: string): string {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-  return `${url}/storage/v1/object/public/${BUCKET}/${path}`
+  // Utilise le transform Supabase pour servir des images redimensionnées
+  // → réduit drastiquement le bandwidth même pour les images déjà uploadées
+  // width=400, quality=75 : ~15x moins de données que l'original
+  return `${url}/storage/v1/render/image/public/product-images/${path}?width=400&quality=75&resize=contain`
+}
+
+/**
+ * Convertit n'importe quelle URL Supabase Storage en URL avec transform.
+ * Fonctionne sur les URLs existantes stockées en base (format /object/public/...)
+ * et les nouvelles (format /render/image/public/...)
+ * → Réduit le bandwidth de ~90% sur les images déjà uploadées
+ */
+export function optimizeImageUrl(url: string | null | undefined, width = 400): string | null {
+  if (!url) return null
+  // Déjà une URL render/image → juste nettoyer les doublons éventuels
+  if (url.includes('/render/image/')) {
+    // Supprimer les paramètres existants et remettre les bons
+    const base = url.split('?')[0]
+    return `${base}?width=${width}&quality=75&resize=contain`
+  }
+  // URL /object/public/ → convertir vers render/image
+  if (url.includes('/storage/v1/object/public/')) {
+    const base = url.split('?')[0]  // enlever tout paramètre existant
+    return base
+      .replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')
+      + `?width=${width}&quality=75&resize=contain`
+  }
+  // URL externe (Cloudinary, etc.) → retourner telle quelle
+  return url
+}
+
+
+/**
+ * Compresse une image côté client avant upload.
+ * Réduit à max 600×600px en JPEG 80% qualité.
+ * Résultat typique : 3 Mo → 40-80 Ko (-95% de bandwidth Supabase)
+ */
+async function compressImage(file: File, maxPx = 600, quality = 0.8): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale  = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const w      = Math.round(img.width  * scale)
+      const h      = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, w, h)
+      canvas.toBlob(
+        blob => {
+          if (!blob) { resolve(file); return }
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }))
+        },
+        'image/jpeg',
+        quality
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image invalide')) }
+    img.src = url
+  })
 }
 
 export async function uploadProductImage(
   productId: string,
   file: File
 ): Promise<string> {
-  const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-  const path = `${productId}.${ext}`
+  // Compression avant upload (réduit drastiquement le bandwidth Supabase)
+  let toUpload: File
+  try {
+    toUpload = await compressImage(file, 600, 0.82)
+  } catch {
+    toUpload = file  // fallback: upload original si compression échoue
+  }
+
+  const path = `${productId}.jpg`   // toujours .jpg après compression
 
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(path, file, { upsert: true, contentType: file.type })
+    .upload(path, toUpload, { upsert: true, contentType: 'image/jpeg' })
 
   if (error) throw error
   return getProductImageUrl(path)
@@ -1623,6 +1691,67 @@ export async function getCreditTransactions(customerId: string) {
     .limit(50)
   if (error) throw error
   return data || []
+}
+
+
+// ─── Congés ───────────────────────────────────────────────────
+
+export async function getLeaveRequests(filters?: { seller_id?: string; status?: string; year?: number }) {
+  let q = supabase
+    .from('leave_requests')
+    .select('*, seller:sellers(id, name, role)')
+    .order('date_from', { ascending: true })
+
+  if (filters?.seller_id) q = q.eq('seller_id', filters.seller_id)
+  if (filters?.status)    q = q.eq('status', filters.status)
+  if (filters?.year) {
+    q = q
+      .gte('date_from', `${filters.year}-01-01`)
+      .lte('date_to',   `${filters.year}-12-31`)
+  }
+
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function createLeaveRequest(data: {
+  seller_id:   string
+  seller_name: string
+  date_from:   string
+  date_to:     string
+  type:        string
+  reason?:     string | null
+}) {
+  const { data: req, error } = await supabase
+    .from('leave_requests')
+    .insert([{ ...data, status: 'pending' }])
+    .select('*, seller:sellers(id, name, role)')
+    .single()
+  if (error) throw error
+  return req
+}
+
+export async function reviewLeaveRequest(id: string, status: 'approved' | 'rejected', reviewedBy: string, managerNote?: string | null) {
+  const { data, error } = await supabase
+    .from('leave_requests')
+    .update({
+      status,
+      reviewed_by:  reviewedBy,
+      reviewed_at:  new Date().toISOString(),
+      manager_note: managerNote ?? null,
+      updated_at:   new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*, seller:sellers(id, name, role)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteLeaveRequest(id: string) {
+  const { error } = await supabase.from('leave_requests').delete().eq('id', id)
+  if (error) throw error
 }
 
 

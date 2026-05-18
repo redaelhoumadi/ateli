@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   Monitor, Package, Users, Calendar, BarChart2, QrCode, X, Menu,
   ShoppingCart, ChevronRight, Wallet, Lock, Settings, LogOut, Layers, Boxes, Gift, CircleDollarSign,
-  Bell, AlertTriangle, Target, RotateCcw, FileDown, ArrowDownToLine, BookMarked, Percent, MessageSquare,
+  Bell, AlertTriangle, Target, RotateCcw, FileDown, ArrowDownToLine, BookMarked, Percent, MessageSquare, Palmtree,
 } from 'lucide-react'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -20,6 +20,7 @@ const ALL_NAV_ITEMS = [
   { href: '/reservations',  label: 'Réservations',  icon: BookMarked,   description: 'Mises de côté' },
   { href: '/retours',      label: 'Retours',       icon: RotateCcw,    description: 'Remboursements' },
   { href: '/notes',         label: 'Notes équipe',  icon: MessageSquare, description: 'Infos & rappels partagés' },
+  { href: '/conges',        label: 'Congés',        icon: Palmtree,      description: 'Demandes de congés' },
   { href: '/produits',     label: 'Produits',     icon: Package,   description: 'Catalogue & stocks' },
   { href: '/clients',      label: 'Clients',      icon: Users,     description: 'Programme fidélité' },
   { href: '/bons-cadeaux',  label: 'Bons cadeaux',  icon: Gift,             description: 'Créer et gérer les bons' },

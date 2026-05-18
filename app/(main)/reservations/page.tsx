@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import {
   getReservations, createReservation, updateReservationStatus,
-  getProducts, getCustomers, createSale,
+  getProducts, getCustomers, createSale, optimizeImageUrl,
 } from '@/lib/supabase'
 import { useAuthStore } from '@/hooks/useAuth'
 import {
@@ -336,8 +336,8 @@ function ReservationCard({ res, onUpdated }: { res: Reservation; onUpdated: () =
               {(res.items || []).map((item: ReservationItem, i) => (
                 <div key={i} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
-                    {item.image_url
-                      ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover"/>
+                    {optimizeImageUrl(item.image_url, 80)
+                      ? <img src={optimizeImageUrl(item.image_url, 80)!} alt={item.name} className="w-full h-full object-cover"/>
                       : <Package size={14} className="text-gray-400"/>}
                   </div>
                   <div className="flex-1 min-w-0">

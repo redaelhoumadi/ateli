@@ -5,11 +5,12 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { generateEAN13, renderEAN13SVG, validateEAN13 } from '@/lib/barcode'
+import NextImage from 'next/image'
 import { Search, Plus, Tag, Euro, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload, Printer, RefreshCw } from 'lucide-react'
 import {
   getAllProducts, getBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
-  uploadProductImage, deleteProductImage, updateStock,
+  uploadProductImage, deleteProductImage, updateStock, optimizeImageUrl,
 } from '@/lib/supabase'
 import { ProductImageUpload } from '@/components/ui/ProductImageUpload'
 import {
@@ -391,7 +392,7 @@ export default function ProduitsPage() {
                   ) : paginated.map(p => {
                     const isSel = selected.has(p.id)
                     const isArc = (p as any).is_active === false  // strictly false = archived
-                    const img   = (p as any).image_url as string|null
+                    const img   = optimizeImageUrl((p as any).image_url as string|null, 80)
                     return (
                       <tr key={p.id} onClick={() => toggleOne(p.id)}
                         className={cn('cursor-pointer transition-colors group', isSel ? 'bg-gray-900/5' : 'hover:bg-gray-50/60')}>
@@ -402,8 +403,8 @@ export default function ProduitsPage() {
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl border border-gray-100 bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">
-                              {img ? <img src={img} alt={p.name} className="w-full h-full object-cover"/> : <ImageIcon size={16} className="text-gray-300"/>}
+                            <div className="w-10 h-10 rounded-xl border border-gray-100 bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center relative">
+                              {img ? <NextImage src={img} alt={p.name} fill sizes="40px" className="object-cover" loading="lazy" quality={75}/> : <ImageIcon size={16} className="text-gray-300"/>}
                             </div>
                             <div>
                               <p className={cn('text-sm font-medium', isArc ? 'text-gray-400' : 'text-gray-900')}>{p.name}</p>

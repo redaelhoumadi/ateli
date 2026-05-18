@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react'
 import { Search } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
-import { getProducts, getBrands, searchProducts, applyActivePromotions } from '@/lib/supabase'
+import { getProducts, getBrands, searchProducts, applyActivePromotions, optimizeImageUrl } from '@/lib/supabase'
 import { cacheProducts, cacheBrands, getCachedProducts, getCachedBrands } from '@/lib/offlineDB'
 import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { Input, Badge, Spinner, cn } from '@/components/ui'
 import { getStockStatus } from '@/types'
 import type { Product, Brand } from '@/types'
+import NextImage from 'next/image'
 
 export function ProductCatalog() {
   const [products, setProducts]       = useState<Product[]>([])
@@ -96,7 +97,7 @@ export function ProductCatalog() {
         <div className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-3">
             {products.map((p) => {
-              const img  = (p as any).image_url as string | null
+              const img  = optimizeImageUrl((p as any).image_url as string | null, 300)
               const price = finalPrice(p)
               return (
                 <button
@@ -116,8 +117,15 @@ export function ProductCatalog() {
                   {/* Photo */}
                   <div className="w-full aspect-square bg-gray-50 overflow-hidden relative">
                     {img ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={img} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <NextImage
+                        src={img}
+                        alt={p.name}
+                        fill
+                        sizes="(max-width: 640px) 50vw, 160px"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                        quality={75}
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package size={32} className="text-gray-200" />

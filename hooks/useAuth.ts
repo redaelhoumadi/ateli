@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import type { Seller } from '@/types'
 
 export const ROLE_ROUTES: Record<string, string[]> = {
-  seller:  ['/pos', '/retours', '/bons-cadeaux', '/reservations', '/stock', '/produits', '/planning', '/notes'],
-  manager: ['/pos', '/produits', '/stock', '/import', '/clients', '/bons-cadeaux', '/marques', '/commissions', '/reversements', '/planning', '/objectifs', '/dashboard', '/retours', '/reservations', '/promotions', '/notes', '/export', '/cloture', '/parametres'],
+  seller:  ['/pos', '/retours', '/bons-cadeaux', '/reservations', '/stock', '/produits', '/planning', '/notes', '/conges'],
+  manager: ['/pos', '/produits', '/stock', '/import', '/clients', '/bons-cadeaux', '/marques', '/commissions', '/reversements', '/planning', '/objectifs', '/dashboard', '/retours', '/reservations', '/promotions', '/notes', '/conges', '/export', '/cloture', '/parametres'],
 }
 
 export function canAccess(role: string | null, path: string): boolean {

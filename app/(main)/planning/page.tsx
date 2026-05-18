@@ -24,23 +24,47 @@ type PlanningData = Record<string, Record<number, Record<string, CreatorSlot>>>
 type Creator = { id: string; name: string }
 
 // ─── Helpers ──────────────────────────────────────────────────
-function getWeekKey(d: Date) {
-  const x = new Date(d), day = x.getDay()
-  x.setDate(x.getDate() - day + (day === 0 ? -6 : 1))
-  return x.toISOString().split('T')[0]
+
+// Formater une date locale en YYYY-MM-DD sans décalage UTC
+function toLocalDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
-function getMon(k: string) { return new Date(k + 'T00:00:00') }
-function addWeeks(k: string, n: number) {
-  const d = getMon(k); d.setDate(d.getDate() + n * 7); return getWeekKey(d)
+
+// Obtenir le lundi de la semaine contenant d
+function getWeekKey(d: Date): string {
+  const x   = new Date(d)
+  const dow  = x.getDay()                          // 0=dim … 6=sam
+  const diff = dow === 0 ? -6 : 1 - dow            // recule au lundi
+  x.setDate(x.getDate() + diff)
+  return toLocalDate(x)
 }
-function fmtWeek(k: string) {
-  const m = getMon(k), s = new Date(m); s.setDate(m.getDate() + 5)
-  return `${m.toLocaleDateString('fr-FR',{day:'numeric',month:'long'})} – ${s.toLocaleDateString('fr-FR',{day:'numeric',month:'long'})}`
+
+// Construire un objet Date depuis un weekKey (heure locale, pas UTC)
+function getMon(k: string): Date {
+  const [y, m, d] = k.split('-').map(Number)
+  return new Date(y, m - 1, d)                      // constructeur local — pas de décalage
 }
-function fmtWeekShort(k: string) {
+
+function addWeeks(k: string, n: number): string {
+  const d = getMon(k)
+  d.setDate(d.getDate() + n * 7)
+  return getWeekKey(d)
+}
+
+function fmtWeek(k: string): string {
   const m = getMon(k)
-  return m.toLocaleDateString('fr-FR', { day:'numeric', month:'short' })
+  const s = new Date(m)
+  s.setDate(m.getDate() + 5)                        // samedi = lundi + 5
+  return `${m.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} – ${s.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
 }
+
+function fmtWeekShort(k: string): string {
+  return getMon(k).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+}
+
 function getCov(slot: CreatorSlot): {start:number;end:number} | null {
   if (slot.slotId === 'off') return null
   if (slot.slotId === 'custom') {
@@ -50,6 +74,7 @@ function getCov(slot: CreatorSlot): {start:number;end:number} | null {
   const def = SLOTS.find(t => t.id === slot.slotId)!
   return { start: def.start, end: def.end }
 }
+
 function getGaps(daySlots: Record<string, CreatorSlot>) {
   const covered = new Set<number>()
   Object.values(daySlots).forEach(slot => { const c = getCov(slot); if (c) for (let h = c.start; h < c.end; h++) covered.add(h) })
@@ -170,36 +195,31 @@ export default function PlanningPage() {
   const [weekKeys, setWeekKeys]       = useState<string[]>([])
   const [showHistory, setShowHistory] = useState(false)
 
-  // Load creators once
-  useEffect(() => {
-    getBrands()
-      .then(d => setCreators((d || []) as Creator[]))
-      .catch(() => {})
-    // Seed from localStorage for offline fallback
-    try {
-      const s = localStorage.getItem('ateli_planning')
-      if (s) setPlanning(JSON.parse(s))
-    } catch {}
-  }, [])
-
-  // Load week from Supabase
+  // Load week from Supabase — source de vérité
+  // Ne pas réinitialiser à {} avant le chargement pour éviter le flash vide
   const loadWeek = useCallback(async (wk: string) => {
     setWeekLoading(true)
     try {
       const rows = await getPlanningWeek(wk)
       setPlanning(prev => {
-        const next: PlanningData = { ...prev, [wk]: {} }
+        // Construire le planning de la semaine depuis Supabase
+        const weekData: Record<number, Record<string, CreatorSlot>> = {}
         for (const row of (rows as any[])) {
-          if (!next[wk][row.day_index]) next[wk][row.day_index] = {}
-          next[wk][row.day_index][row.creator_id] = {
-            slotId: row.slot_id as SlotId,
+          if (!weekData[row.day_index]) weekData[row.day_index] = {}
+          weekData[row.day_index][row.creator_id] = {
+            slotId:      row.slot_id as SlotId,
             customStart: row.custom_start ?? undefined,
-            customEnd: row.custom_end ?? undefined,
+            customEnd:   row.custom_end   ?? undefined,
           }
         }
-        return next
+        // Fusionner avec les autres semaines en mémoire — ne pas effacer les autres
+        return { ...prev, [wk]: weekData }
       })
-    } catch {} finally { setWeekLoading(false) }
+    } catch (e) {
+      console.error('[planning] loadWeek error:', e)
+    } finally {
+      setWeekLoading(false)
+    }
   }, [])
 
   // Load week history keys
@@ -211,8 +231,10 @@ export default function PlanningPage() {
   }, [])
 
   useEffect(() => {
+    // Charger créateurs + historique — Supabase est source de vérité
     getBrands()
       .then(d => { setCreators((d || []) as Creator[]); setLoading(false) })
+      .catch(() => setLoading(false))
     loadHistory()
   }, [loadHistory])
 
@@ -229,8 +251,7 @@ export default function PlanningPage() {
       if (!next[weekKey]) next[weekKey] = {}
       if (!next[weekKey][di]) next[weekKey][di] = {}
       next[weekKey][di][cId] = slot
-      // Persist to localStorage as fallback
-      try { localStorage.setItem('ateli_planning', JSON.stringify(next)) } catch {}
+      // Persist to Supabase — source de vérité (plus de localStorage)
       return next
     })
     // Save to Supabase
