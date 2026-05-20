@@ -365,6 +365,70 @@ export async function getPortalStats(brandId: string) {
 }
 
 
+export async function getBrandSales(brandId: string, filters: {
+  mode:      'day' | 'week' | 'month' | 'custom'
+  dateFrom?: string   // YYYY-MM-DD
+  dateTo?:   string   // YYYY-MM-DD
+}) {
+  // Calculer les bornes selon le mode
+  const now   = new Date()
+  let from: string
+  let to: string
+
+  const pad = (n: number) => String(n).padStart(2,'0')
+  const localStr = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+
+  if (filters.mode === 'custom' && filters.dateFrom && filters.dateTo) {
+    from = filters.dateFrom
+    to   = filters.dateTo
+  } else if (filters.mode === 'day') {
+    from = to = localStr(now)
+  } else if (filters.mode === 'week') {
+    const dow  = now.getDay()
+    const diff = dow === 0 ? -6 : 1 - dow
+    const mon  = new Date(now); mon.setDate(now.getDate() + diff)
+    const sun  = new Date(mon); sun.setDate(mon.getDate() + 6)
+    from = localStr(mon); to = localStr(sun)
+  } else {
+    // month
+    from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`
+    const lastDay = new Date(now.getFullYear(), now.getMonth()+1, 0)
+    to   = localStr(lastDay)
+  }
+
+  const { data, error } = await supabase
+    .from('sales')
+    .select('id, created_at, items:sale_items(quantity, total_price, unit_price, product:products(id, name, brand_id))')
+    .gte('created_at', `${from}T00:00:00`)
+    .lte('created_at', `${to}T23:59:59`)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+
+  // Filtrer les ventes qui contiennent au moins un article de la marque
+  const sales = ((data || []) as any[])
+    .map(sale => {
+      const brandItems = (sale.items || []).filter((i: any) => i.product?.brand_id === brandId)
+      if (!brandItems.length) return null
+      return {
+        id:    sale.id,
+        date:  sale.created_at,
+        total: brandItems.reduce((s: number, i: any) => s + i.total_price, 0),
+        items: brandItems.map((i: any) => ({
+          name:  i.product.name,
+          qty:   i.quantity,
+          price: i.total_price,
+        })),
+      }
+    })
+    .filter(Boolean)
+
+  const gross = sales.reduce((s: number, sale: any) => s + sale.total, 0)
+  return { sales, gross, from, to }
+}
+
+
 export async function getBrandById(id: string) {
   const { data, error } = await supabase
     .from('brands')

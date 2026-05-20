@@ -7,9 +7,9 @@ import { useParams } from 'next/navigation'
 import {
   TrendingUp, Package, ShoppingCart, Globe, Instagram,
   ChevronDown, ChevronUp, Calendar, Wallet, BarChart2,
-  RefreshCw, AlertTriangle,
+  RefreshCw, AlertTriangle, Search,
 } from 'lucide-react'
-import { getBrandByToken, getPortalStats, getProductsByBrand, getReversements } from '@/lib/supabase'
+import { getBrandByToken, getPortalStats, getProductsByBrand, getReversements, getBrandSales } from '@/lib/supabase'
 import { Spinner, cn } from '@/components/ui'
 import type { Brand, Product, Reversement } from '@/types'
 
@@ -104,6 +104,17 @@ export default function CreateurPortalPage() {
   const [notFound, setNotFound]       = useState(false)
   const [tab, setTab]                 = useState<'dashboard'|'produits'|'ventes'|'reversements'>('dashboard')
 
+  // ── Filtres onglet ventes ──
+  type SalesMode = 'day' | 'week' | 'month' | 'custom'
+  const [salesMode, setSalesMode]       = useState<SalesMode>('week')
+  const [customFrom, setCustomFrom]     = useState('')
+  const [customTo, setCustomTo]         = useState('')
+  const [filteredSales, setFilteredSales] = useState<any[] | null>(null)
+  const [filteredGross, setFilteredGross] = useState(0)
+  const [filteredFrom, setFilteredFrom]   = useState('')
+  const [filteredTo, setFilteredTo]       = useState('')
+  const [loadingSales, setLoadingSales] = useState(false)
+
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
@@ -123,6 +134,31 @@ export default function CreateurPortalPage() {
   }
 
   useEffect(() => { load() }, [token])
+
+  const loadSales = async (mode: 'day'|'week'|'month'|'custom', from?: string, to?: string) => {
+    if (!brand) return
+    setLoadingSales(true)
+    try {
+      const res = await getBrandSales(brand.id, { mode, dateFrom: from, dateTo: to })
+      setFilteredSales(res.sales as any[])
+      setFilteredGross(res.gross)
+      setFilteredFrom(res.from)
+      setFilteredTo(res.to)
+    } catch {} finally { setLoadingSales(false) }
+  }
+
+  useEffect(() => {
+    if (tab === 'ventes' && brand && filteredSales === null) loadSales('week')
+  }, [tab, brand]) // eslint-disable-line
+
+  const handleSalesFilter = (mode: 'day'|'week'|'month'|'custom') => {
+    setSalesMode(mode)
+    if (mode !== 'custom') loadSales(mode)
+  }
+
+  const handleCustomSearch = () => {
+    if (customFrom && customTo && customTo >= customFrom) loadSales('custom', customFrom, customTo)
+  }
 
   const catColor = CAT_COLORS[brand?.category ?? ''] ?? '#6366f1'
   const commRate = brand?.commission_rate ?? 30
@@ -468,22 +504,92 @@ export default function CreateurPortalPage() {
           ══════════════════════════ */}
           {tab === 'ventes' && (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">{stats.recentSales.length} dernière{stats.recentSales.length > 1 ? 's' : ''} vente{stats.recentSales.length > 1 ? 's' : ''}</p>
-                <p className="text-sm font-bold text-gray-900">{fmtShort(stats.gross)} au total</p>
+              {/* Mode selector */}
+              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
+                  {([
+                    { id: 'day',   label: "Aujourd'hui" },
+                    { id: 'week',  label: 'Cette semaine' },
+                    { id: 'month', label: 'Ce mois' },
+                    { id: 'custom',label: 'Choisir' },
+                  ] as const).map(m => (
+                    <button key={m.id} onClick={() => handleSalesFilter(m.id)}
+                      className={cn('flex-1 py-2 rounded-lg text-xs font-semibold transition-all',
+                        salesMode === m.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom date range */}
+                {salesMode === 'custom' && (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">Du</p>
+                        <input type="date" value={customFrom}
+                          onChange={e => setCustomFrom(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">Au</p>
+                        <input type="date" value={customTo} min={customFrom}
+                          onChange={e => setCustomTo(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                      </div>
+                    </div>
+                    <button onClick={handleCustomSearch}
+                      disabled={!customFrom || !customTo || customTo < customFrom || loadingSales}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl disabled:opacity-40 transition-all hover:bg-black">
+                      <Search size={14}/> Rechercher
+                    </button>
+                  </div>
+                )}
+
+                {/* Period summary */}
+                {filteredFrom && filteredTo && filteredSales !== null && (
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="text-xs text-gray-400">
+                      {filteredFrom === filteredTo
+                        ? new Date(filteredFrom + 'T12:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })
+                        : `${new Date(filteredFrom + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' })} → ${new Date(filteredTo + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' })}`}
+                    </p>
+                    <div className="text-right">
+                      <p className="text-base font-black text-gray-900">{filteredGross.toFixed(2)} €</p>
+                      <p className="text-xs text-gray-400">{filteredSales.length} vente{filteredSales.length > 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {stats.recentSales.length === 0 ? (
+              {/* Sales list */}
+              {loadingSales ? (
+                <div className="flex justify-center py-12"><Spinner size="lg"/></div>
+              ) : filteredSales === null ? null
+              : filteredSales.length === 0 ? (
                 <div className="bg-white border border-gray-100 rounded-2xl p-10 text-center">
                   <ShoppingCart size={36} className="text-gray-200 mx-auto mb-3"/>
-                  <p className="text-sm font-semibold text-gray-700">Aucune vente</p>
-                  <p className="text-xs text-gray-400 mt-1">Vos ventes apparaîtront ici dès le premier achat</p>
+                  <p className="text-sm font-semibold text-gray-700">Aucune vente sur cette période</p>
+                  <p className="text-xs text-gray-400 mt-1">Essayez une autre période</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {stats.recentSales.map((sale, i) => (
-                    <SaleRow key={i} sale={sale}/>
+                  {filteredSales.map((sale: any, i: number) => (
+                    <SaleRow key={sale.id || i} sale={sale}/>
                   ))}
+                  {/* Total footer */}
+                  <div className="bg-gray-900 rounded-2xl px-5 py-4 flex items-center justify-between text-white">
+                    <div>
+                      <p className="text-xs text-gray-400">Total période</p>
+                      <p className="text-sm font-semibold text-gray-300">
+                        {filteredSales.length} vente{filteredSales.length > 1 ? 's' : ''} · {filteredSales.reduce((s: number, v: any) => s + v.items.reduce((ss: number, i: any) => ss + i.qty, 0), 0)} articles
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-black">{filteredGross.toFixed(2)} €</p>
+                      <p className="text-xs text-gray-400">votre part : {((filteredGross * (1 - commRate/100))).toFixed(2)} €</p>
+                    </div>
+                  </div>
                 </div>
               )}
             </>
