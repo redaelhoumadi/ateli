@@ -12,7 +12,7 @@ import {
   deleteLeaveRequest, getSellers,
 } from '@/lib/supabase'
 import { useAuthStore } from '@/hooks/useAuth'
-import { Button, Spinner, ConfirmDialog, cn } from '@/components/ui'
+import { Button, Spinner, ConfirmDialog, cn, DatePicker } from '@/components/ui'
 
 // ─── Types ────────────────────────────────────────────────────
 type LeaveStatus = 'pending' | 'approved' | 'rejected'
@@ -388,15 +388,11 @@ function NewLeaveForm({ sellerId, sellerName, onSave, onCancel }: {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-xs font-semibold text-gray-500 block mb-1">Du *</label>
-          <input type="date" value={dateFrom} min={today}
-            onChange={e => { setDateFrom(e.target.value); if (e.target.value > dateTo) setDateTo(e.target.value) }}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+          <DatePicker value={dateFrom} onChange={v => { setDateFrom(v); if (v > dateTo) setDateTo(v) }} min={today} placeholder="Du"/>
         </div>
         <div>
           <label className="text-xs font-semibold text-gray-500 block mb-1">Au *</label>
-          <input type="date" value={dateTo} min={dateFrom}
-            onChange={e => setDateTo(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+          <DatePicker value={dateTo} onChange={setDateTo} min={dateFrom} placeholder="Au"/>
         </div>
       </div>
 

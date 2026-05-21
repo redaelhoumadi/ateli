@@ -10,7 +10,7 @@ import {
   RefreshCw, AlertTriangle, Search,
 } from 'lucide-react'
 import { getBrandByToken, getPortalStats, getProductsByBrand, getReversements, getBrandSales } from '@/lib/supabase'
-import { Spinner, cn } from '@/components/ui'
+import { Spinner, cn, DatePicker } from '@/components/ui'
 import type { Brand, Product, Reversement } from '@/types'
 
 // ─── Types locaux ─────────────────────────────────────────────
@@ -527,15 +527,11 @@ export default function CreateurPortalPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <p className="text-xs text-gray-400 mb-1">Du</p>
-                        <input type="date" value={customFrom}
-                          onChange={e => setCustomFrom(e.target.value)}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                        <DatePicker value={customFrom} onChange={setCustomFrom} placeholder="Du"/>
                       </div>
                       <div>
                         <p className="text-xs text-gray-400 mb-1">Au</p>
-                        <input type="date" value={customTo} min={customFrom}
-                          onChange={e => setCustomTo(e.target.value)}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                        <DatePicker value={customTo} onChange={setCustomTo} min={customFrom} placeholder="Au"/>
                       </div>
                     </div>
                     <button onClick={handleCustomSearch}
