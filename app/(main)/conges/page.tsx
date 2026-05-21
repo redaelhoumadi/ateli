@@ -426,6 +426,221 @@ function NewLeaveForm({ sellerId, sellerName, onSave, onCancel }: {
   )
 }
 
+// ─── Leave Timeline ───────────────────────────────────────────
+function LeaveTimeline({ year, month, leaves }: {
+  year:   number
+  month:  number
+  leaves: LeaveRequest[]
+}) {
+  const totalDays  = daysInMonth(year, month)
+  const today      = toLocalStr(new Date())
+  const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`
+  const monthEnd   = `${year}-${String(month+1).padStart(2,'0')}-${String(totalDays).padStart(2,'0')}`
+
+  const { rows, sellerMap, dayMap, overlapDays } = useMemo(() => {
+    const visible = leaves.filter(l =>
+      l.status !== 'rejected' &&
+      l.date_from <= monthEnd &&
+      l.date_to   >= monthStart
+    )
+    const sm = new Map<string, { name: string; color: string; leaves: LeaveRequest[] }>()
+    for (const l of visible) {
+      if (!sm.has(l.seller_id)) {
+        sm.set(l.seller_id, {
+          name:   l.seller_name,
+          color:  SELLER_COLORS[l.seller_name.charCodeAt(0) % SELLER_COLORS.length],
+          leaves: [],
+        })
+      }
+      sm.get(l.seller_id)!.leaves.push(l)
+    }
+    const dm: Record<string, string[]> = {}
+    for (const l of visible) {
+      const from = parseLocal(l.date_from > monthStart ? l.date_from : monthStart)
+      const to   = parseLocal(l.date_to   < monthEnd   ? l.date_to   : monthEnd)
+      const cur  = new Date(from)
+      while (cur <= to) {
+        const k = toLocalStr(cur)
+        if (!dm[k]) dm[k] = []
+        if (!dm[k].includes(l.seller_id)) dm[k].push(l.seller_id)
+        cur.setDate(cur.getDate() + 1)
+      }
+    }
+    const od = new Set(Object.entries(dm).filter(([, ids]) => ids.length > 1).map(([d]) => d))
+    return { rows: [...sm.values()], sellerMap: sm, dayMap: dm, overlapDays: od }
+  }, [leaves, year, month, monthStart, monthEnd])
+
+  if (rows.length === 0) return (
+    <div className="bg-white border border-gray-100 rounded-2xl px-4 py-8 text-center shadow-sm">
+      <p className="text-sm text-gray-400">Aucun congé sur ce mois</p>
+    </div>
+  )
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Calendar size={14} className="text-gray-400"/>
+          <p className="text-sm font-bold text-gray-900">Planification équipe</p>
+          <span className="text-xs text-gray-400 font-normal capitalize">
+            — {new Date(year, month, 1).toLocaleDateString('fr-FR', { month:'long', year:'numeric' })}
+          </span>
+        </div>
+        {overlapDays.size > 0 ? (
+          <span className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2.5 py-1 rounded-full">
+            <AlertTriangle size={10}/> {overlapDays.size} jour{overlapDays.size > 1 ? 's' : ''} en chevauchement
+          </span>
+        ) : (
+          <span className="text-xs font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full">
+            ✓ Aucun conflit
+          </span>
+        )}
+      </div>
+
+      {/* Timeline scrollable */}
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: `${Math.max(480, totalDays * 26 + 110)}px` }}>
+          <div className="px-3 pt-3">
+            {/* Day header numbers */}
+            <div className="flex mb-1">
+              <div className="w-24 shrink-0"/>
+              {Array.from({ length: totalDays }).map((_, i) => {
+                const d       = i + 1
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+                const dow     = new Date(year, month, d).getDay()
+                const isWknd  = dow === 0 || dow === 6
+                const isToday = dateStr === today
+                const isOver  = overlapDays.has(dateStr)
+                return (
+                  <div key={d} className={cn(
+                    'flex-1 text-center text-[10px] font-semibold pb-1',
+                    isOver  ? 'text-red-500 font-bold' :
+                    isToday ? 'text-indigo-600 font-black' :
+                    isWknd  ? 'text-red-300' : 'text-gray-400'
+                  )}>
+                    {d}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Seller rows */}
+            {rows.map(({ name, color, leaves: rowLeaves }) => (
+              <div key={name} className="flex items-center mb-2">
+                {/* Seller name chip */}
+                <div className="w-24 shrink-0 flex items-center gap-1.5 pr-2">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-black shrink-0"
+                    style={{ background: color }}>
+                    {name[0]}
+                  </div>
+                  <span className="text-xs font-semibold text-gray-700 truncate leading-tight">
+                    {name.split(' ')[0]}
+                  </span>
+                </div>
+
+                {/* Bar track */}
+                <div className="flex-1 relative" style={{ height: 28 }}>
+                  {/* Day grid background */}
+                  <div className="absolute inset-0 flex">
+                    {Array.from({ length: totalDays }).map((_, i) => {
+                      const d       = i + 1
+                      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+                      const dow     = new Date(year, month, d).getDay()
+                      const isWknd  = dow === 0 || dow === 6
+                      const isOver  = overlapDays.has(dateStr)
+                      const isToday = dateStr === today
+                      return (
+                        <div key={d} className={cn(
+                          'flex-1 h-full border-r border-gray-100',
+                          isOver  ? 'bg-red-50' :
+                          isToday ? 'bg-indigo-50' :
+                          isWknd  ? 'bg-gray-50' : ''
+                        )}/>
+                      )
+                    })}
+                  </div>
+
+                  {/* Leave bars */}
+                  {rowLeaves.map(leave => {
+                    const from = leave.date_from > monthStart ? leave.date_from : monthStart
+                    const to   = leave.date_to   < monthEnd   ? leave.date_to   : monthEnd
+                    const s    = parseLocal(from).getDate()
+                    const e    = parseLocal(to).getDate()
+                    const lft  = ((s - 1) / totalDays) * 100
+                    const wdt  = ((e - s + 1) / totalDays) * 100
+                    const pend = leave.status === 'pending'
+                    return (
+                      <div key={leave.id}
+                        className={cn(
+                          'absolute top-1/2 -translate-y-1/2 rounded-lg flex items-center justify-center overflow-hidden',
+                          pend ? 'border-2 border-dashed' : ''
+                        )}
+                        style={{
+                          left:        `${lft}%`,
+                          width:       `calc(${wdt}% - 2px)`,
+                          height:      20,
+                          background:  pend ? `${color}22` : color,
+                          borderColor: pend ? color : undefined,
+                        }}
+                        title={`${leave.seller_name} · ${TYPE_CFG[leave.type].label} · ${STATUS_CFG[leave.status].label} · ${formatDate(leave.date_from)} → ${formatDate(leave.date_to)}`}
+                      >
+                        {e - s >= 2 && (
+                          <span className="text-[9px] font-bold px-1 truncate"
+                            style={{ color: pend ? color : 'white' }}>
+                            {TYPE_CFG[leave.type].label}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="px-3 pb-3 flex items-center gap-4 flex-wrap border-t border-gray-50 mt-1 pt-2.5">
+            <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+              <div className="w-4 h-2.5 rounded-sm bg-indigo-500"/>Approuvé
+            </span>
+            <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+              <div className="w-4 h-2.5 rounded-sm border-2 border-dashed border-amber-400"/>En attente
+            </span>
+            {overlapDays.size > 0 && (
+              <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                <div className="w-4 h-2.5 rounded-sm bg-red-100 border border-red-200"/>Chevauchement
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Conflict details */}
+      {overlapDays.size > 0 && (
+        <div className="px-3 pb-3">
+          <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2.5 space-y-1.5">
+            <p className="text-xs font-bold text-red-700">Jours en conflit :</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[...overlapDays].sort().map(day => {
+                const ids   = dayMap[day]
+                const names = ids.map(id => sellerMap.get(id)?.name.split(' ')[0] ?? '').join(' & ')
+                return (
+                  <span key={day}
+                    className="text-[10px] font-semibold bg-white border border-red-200 rounded-md px-2 py-0.5 text-red-700 whitespace-nowrap">
+                    {parseLocal(day).toLocaleDateString('fr-FR', { day:'numeric', month:'short' })}
+                    <span className="text-red-400 ml-1.5">— {names}</span>
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────
 export default function CongesPage() {
   const { seller } = useAuthStore()
@@ -556,6 +771,11 @@ export default function CongesPage() {
           onDayClick={d => setSelectedDay(prev => prev === d ? null : d)}
           onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m) }}
         />
+
+        {/* Timeline chevauchements (manager only) */}
+        {isManager && (
+          <LeaveTimeline year={calYear} month={calMonth} leaves={leaves}/>
+        )}
 
         {/* Selected day info */}
         {selectedDay && (
