@@ -60,10 +60,13 @@ const PAY_CFG: Record<string, { label: string; icon: string; color: string; bg: 
   store_credit: { label: 'Avoir',      icon: '🏪', color: '#6b7280', bg: '#F9FAFB' },
 }
 
+const getPayCfg = (method: string | null | undefined) =>
+  PAY_CFG[method ?? ''] ?? null  // null = non renseigné → on masque
+
 function SaleRow({ sale }: { sale: Stats['recentSales'][number] & { payment_method?: string } }) {
   const [open, setOpen] = useState(false)
   const d   = new Date(sale.date)
-  const pay = PAY_CFG[sale.payment_method ?? ''] ?? { label: sale.payment_method ?? '—', icon: '💰', color: '#6b7280', bg: '#F9FAFB' }
+  const pay = getPayCfg(sale.payment_method)
   return (
     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white">
       <button onClick={() => setOpen(!open)}
@@ -77,8 +80,7 @@ function SaleRow({ sale }: { sale: Stats['recentSales'][number] & { payment_meth
             <p className="text-xs text-gray-400">
               {d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · {sale.items.reduce((s, i) => s + i.qty, 0)} article{sale.items.reduce((s, i) => s + i.qty, 0) > 1 ? 's' : ''}
             </p>
-            {/* Payment method badge */}
-            {sale.payment_method && (
+            {pay && (
               <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
                 style={{ color: pay.color, background: pay.bg }}>
                 {pay.icon} {pay.label}
@@ -98,10 +100,14 @@ function SaleRow({ sale }: { sale: Stats['recentSales'][number] & { payment_meth
             </div>
           ))}
           <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full"
-              style={{ color: pay.color, background: pay.bg }}>
-              {pay.icon} Payé en {pay.label}
-            </span>
+            {pay ? (
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+                style={{ color: pay.color, background: pay.bg }}>
+                {pay.icon} Payé en {pay.label}
+              </span>
+            ) : (
+              <span className="text-xs text-gray-400">Mode de paiement non renseigné</span>
+            )}
             <span className="text-xs font-black text-gray-900">{fmt(sale.total)}</span>
           </div>
         </div>
@@ -162,29 +168,36 @@ export default function CreateurPortalPage() {
 
   useEffect(() => { load() }, [token])
 
-  const loadSales = async (mode: 'day'|'week'|'month'|'custom', from?: string, to?: string) => {
-    if (!brand) return
+  const loadSales = async (mode: 'day'|'week'|'month'|'custom', from?: string, to?: string, brandId?: string) => {
+    const id = brandId ?? brand?.id
+    if (!id) return
     setLoadingSales(true)
     try {
-      const res = await getBrandSales(brand.id, { mode, dateFrom: from, dateTo: to })
+      const res = await getBrandSales(id, { mode, dateFrom: from, dateTo: to })
       setFilteredSales(res.sales as any[])
       setFilteredGross(res.gross)
       setFilteredFrom(res.from)
       setFilteredTo(res.to)
-    } catch {} finally { setLoadingSales(false) }
+    } catch (e) {
+      console.error('[loadSales]', e)
+    } finally { setLoadingSales(false) }
   }
 
   useEffect(() => {
-    if (tab === 'ventes' && brand && filteredSales === null) loadSales('week')
-  }, [tab, brand]) // eslint-disable-line
+    if (tab === 'ventes' && brand?.id && filteredSales === null) {
+      loadSales('week', undefined, undefined, brand.id)
+    }
+  }, [tab, brand?.id]) // eslint-disable-line
 
   const handleSalesFilter = (mode: 'day'|'week'|'month'|'custom') => {
     setSalesMode(mode)
-    if (mode !== 'custom') loadSales(mode)
+    if (mode !== 'custom') loadSales(mode, undefined, undefined, brand?.id)
   }
 
   const handleCustomSearch = () => {
-    if (customFrom && customTo && customTo >= customFrom) loadSales('custom', customFrom, customTo)
+    if (customFrom && customTo && customTo >= customFrom) {
+      loadSales('custom', customFrom, customTo, brand?.id)
+    }
   }
 
   const catColor = CAT_COLORS[brand?.category ?? ''] ?? '#6366f1'
@@ -594,7 +607,8 @@ export default function CreateurPortalPage() {
                       {/* Payment breakdown — toujours visible dès qu'il y a des ventes */}
                       <div className="space-y-2">
                         {entries.map(([method, total]) => {
-                          const cfg = PAY_CFG[method] ?? { label: method, icon: '💰', color: '#6b7280', bg: '#F9FAFB' }
+                          const cfg = getPayCfg(method)
+                          if (!cfg) return null   // ne pas afficher les ventes sans mode
                           const pct = filteredGross > 0 ? (total / filteredGross) * 100 : 0
                           return (
                             <div key={method} className="flex items-center gap-2.5">

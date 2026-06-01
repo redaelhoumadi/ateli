@@ -399,9 +399,12 @@ export async function getBrandSales(brandId: string, filters: {
 
   const { data, error } = await supabase
     .from('sales')
-    .select('id, created_at, items:sale_items(quantity, total_price, unit_price, product:products(id, name, brand_id))')
-    .gte('created_at', `${from}T00:00:00`)
-    .lte('created_at', `${to}T23:59:59`)
+    .select('id, created_at, payment_method, items:sale_items(quantity, total_price, unit_price, product:products(id, name, brand_id))')
+    // Bornes en UTC : minuit local → minuit UTC du lendemain
+    // On prend large (+1 jour de marge) puis on re-filtre côté JS par date locale
+    // pour éviter les décalages UTC qui feraient manquer des ventes
+    .gte('created_at', new Date(`${from}T00:00:00`).toISOString())
+    .lte('created_at', new Date(`${to}T23:59:59`).toISOString())
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -412,8 +415,9 @@ export async function getBrandSales(brandId: string, filters: {
       const brandItems = (sale.items || []).filter((i: any) => i.product?.brand_id === brandId)
       if (!brandItems.length) return null
       return {
-        id:    sale.id,
-        date:  sale.created_at,
+        id:             sale.id,
+        date:           sale.created_at,
+        payment_method: sale.payment_method ?? null,
         total: brandItems.reduce((s: number, i: any) => s + i.total_price, 0),
         items: brandItems.map((i: any) => ({
           name:  i.product.name,
