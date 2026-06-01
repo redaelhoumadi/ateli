@@ -50,9 +50,20 @@ function KpiCard({ label, value, sub, color, icon }: {
   )
 }
 
-function SaleRow({ sale }: { sale: Stats['recentSales'][number] }) {
+// ─── Payment method config ────────────────────────────────────
+const PAY_CFG: Record<string, { label: string; icon: string; color: string; bg: string }> = {
+  card:         { label: 'Carte',      icon: '💳', color: '#2563eb', bg: '#EFF6FF' },
+  cash:         { label: 'Espèces',    icon: '💵', color: '#059669', bg: '#ECFDF5' },
+  mixed:        { label: 'Mixte',      icon: '🔀', color: '#7c3aed', bg: '#F5F3FF' },
+  gift_card:    { label: 'Bon cadeau', icon: '🎁', color: '#f59e0b', bg: '#FFFBEB' },
+  points:       { label: 'Points',     icon: '⭐', color: '#d97706', bg: '#FFFBEB' },
+  store_credit: { label: 'Avoir',      icon: '🏪', color: '#6b7280', bg: '#F9FAFB' },
+}
+
+function SaleRow({ sale }: { sale: Stats['recentSales'][number] & { payment_method?: string } }) {
   const [open, setOpen] = useState(false)
-  const d = new Date(sale.date)
+  const d   = new Date(sale.date)
+  const pay = PAY_CFG[sale.payment_method ?? ''] ?? { label: sale.payment_method ?? '—', icon: '💰', color: '#6b7280', bg: '#F9FAFB' }
   return (
     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white">
       <button onClick={() => setOpen(!open)}
@@ -62,9 +73,18 @@ function SaleRow({ sale }: { sale: Stats['recentSales'][number] }) {
           <p className="text-sm font-semibold text-gray-900">
             {d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
           </p>
-          <p className="text-xs text-gray-400">
-            {d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · {sale.items.reduce((s, i) => s + i.qty, 0)} article{sale.items.reduce((s, i) => s + i.qty, 0) > 1 ? 's' : ''}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <p className="text-xs text-gray-400">
+              {d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · {sale.items.reduce((s, i) => s + i.qty, 0)} article{sale.items.reduce((s, i) => s + i.qty, 0) > 1 ? 's' : ''}
+            </p>
+            {/* Payment method badge */}
+            {sale.payment_method && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                style={{ color: pay.color, background: pay.bg }}>
+                {pay.icon} {pay.label}
+              </span>
+            )}
+          </div>
         </div>
         <p className="text-sm font-black text-gray-900 shrink-0">{fmt(sale.total)}</p>
         {open ? <ChevronUp size={14} className="text-gray-400 shrink-0"/> : <ChevronDown size={14} className="text-gray-400 shrink-0"/>}
@@ -77,6 +97,13 @@ function SaleRow({ sale }: { sale: Stats['recentSales'][number] }) {
               <span className="shrink-0 font-medium">{item.price.toFixed(2)} €</span>
             </div>
           ))}
+          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+              style={{ color: pay.color, background: pay.bg }}>
+              {pay.icon} Payé en {pay.label}
+            </span>
+            <span className="text-xs font-black text-gray-900">{fmt(sale.total)}</span>
+          </div>
         </div>
       )}
     </div>
@@ -542,18 +569,64 @@ export default function CreateurPortalPage() {
                   </div>
                 )}
 
-                {/* Period summary */}
-                {filteredFrom && filteredTo && filteredSales !== null && (
-                  <div className="flex items-center justify-between pt-1">
+                {/* Period summary + payment breakdown */}
+                {filteredFrom && filteredTo && filteredSales !== null && filteredSales.length > 0 && (() => {
+                  const breakdown: Record<string, number> = {}
+                  filteredSales.forEach((s: any) => {
+                    const m = s.payment_method || 'other'
+                    breakdown[m] = (breakdown[m] || 0) + s.total
+                  })
+                  const entries = Object.entries(breakdown).sort((a, b) => b[1] - a[1])
+                  return (
+                    <div className="border-t border-gray-100 pt-3 space-y-3">
+                      {/* Total line */}
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-400">
+                          {filteredFrom === filteredTo
+                            ? new Date(filteredFrom + 'T12:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })
+                            : `${new Date(filteredFrom + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' })} → ${new Date(filteredTo + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' })}`}
+                        </p>
+                        <div className="text-right">
+                          <p className="text-base font-black text-gray-900">{filteredGross.toFixed(2)} €</p>
+                          <p className="text-xs text-gray-400">{filteredSales.length} vente{filteredSales.length > 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                      {/* Payment breakdown — toujours visible dès qu'il y a des ventes */}
+                      <div className="space-y-2">
+                        {entries.map(([method, total]) => {
+                          const cfg = PAY_CFG[method] ?? { label: method, icon: '💰', color: '#6b7280', bg: '#F9FAFB' }
+                          const pct = filteredGross > 0 ? (total / filteredGross) * 100 : 0
+                          return (
+                            <div key={method} className="flex items-center gap-2.5">
+                              <span className="text-sm shrink-0">{cfg.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between mb-1">
+                                  <span className="text-xs font-semibold text-gray-700">{cfg.label}</span>
+                                  <span className="text-xs font-black text-gray-900">{total.toFixed(2)} €</span>
+                                </div>
+                                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${pct}%`, background: cfg.color }}/>
+                                </div>
+                              </div>
+                              <span className="text-[11px] text-gray-400 shrink-0 w-8 text-right">{pct.toFixed(0)}%</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* No sales for period */}
+                {filteredFrom && filteredSales !== null && filteredSales.length === 0 && (
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                     <p className="text-xs text-gray-400">
                       {filteredFrom === filteredTo
                         ? new Date(filteredFrom + 'T12:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })
                         : `${new Date(filteredFrom + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' })} → ${new Date(filteredTo + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' })}`}
                     </p>
-                    <div className="text-right">
-                      <p className="text-base font-black text-gray-900">{filteredGross.toFixed(2)} €</p>
-                      <p className="text-xs text-gray-400">{filteredSales.length} vente{filteredSales.length > 1 ? 's' : ''}</p>
-                    </div>
+                    <p className="text-xs text-gray-400">0 vente</p>
                   </div>
                 )}
               </div>
