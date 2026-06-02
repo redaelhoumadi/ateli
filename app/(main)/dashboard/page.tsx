@@ -311,6 +311,27 @@ export default function DashboardPage() {
     return Array.from(map.entries()).sort((a,b)=>a[0]-b[0])
   }, [filtered])
 
+  const DAY_LABELS = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam']
+  const DAY_ORDER  = [1,2,3,4,5,6,0]
+
+  const dailyRevenue = useMemo(() => {
+    const map = new Map<number,number>()
+    for(let d=0;d<7;d++) map.set(d,0)
+    filtered.forEach(s=>{const d=new Date(s.created_at).getDay();map.set(d,(map.get(d)||0)+s.total)})
+    return DAY_ORDER.map(d=>[DAY_LABELS[d], map.get(d)||0] as [string,number])
+  }, [filtered])
+
+  const weeklyRevenue = useMemo(() => {
+    const map = new Map<number,number>()
+    filtered.forEach(s=>{
+      const d = new Date(s.created_at)
+      const jan1 = new Date(d.getFullYear(),0,1)
+      const week = Math.ceil(((d.getTime()-jan1.getTime())/86400000 + jan1.getDay()+1)/7)
+      map.set(week,(map.get(week)||0)+s.total)
+    })
+    return Array.from(map.entries()).sort((a,b)=>a[0]-b[0]).map(([w,v])=>[`S${w}`,v] as [string,number])
+  }, [filtered])
+
   const loyaltyStats = useMemo(() => {
     const tiers = REWARDS_TIERS.map(t=>({...t,count:0,revenue:0}))
     filtered.forEach(s=>{
@@ -324,6 +345,8 @@ export default function DashboardPage() {
   }, [filtered])
 
   const maxHour = Math.max(...hourlyRevenue.map(([,v])=>v),1)
+  const maxDay  = Math.max(...dailyRevenue.map(([,v])=>v),1)
+  const maxWeek = Math.max(...weeklyRevenue.map(([,v])=>v),1)
 
   const PERIOD_PRESETS = [
     ['today',"Aujourd'hui"],['week','7 jours'],['month','30 jours'],['all','Tout']
@@ -459,6 +482,45 @@ export default function DashboardPage() {
                             </div>
                           </div>
                         ))}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Daily & Weekly revenue charts */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* CA par jour */}
+                    <Card>
+                      <CardHeader><CardTitle>CA par jour</CardTitle></CardHeader>
+                      <CardContent>
+                        {filtered.length === 0 ? <EmptyState icon="📅" title="Pas de données"/> : (
+                          <div className="flex items-end gap-1 h-36">
+                            {dailyRevenue.map(([label,v])=>(
+                              <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                                <div className="w-full rounded-t-md transition-all duration-500 min-h-[4px]"
+                                  style={{height:`${Math.max(4,(v/maxDay)*120)}px`,background:v>0?'#0ea5e9':'#f3f4f6'}}/>
+                                <span className="text-xs text-gray-400">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* CA par semaine */}
+                    <Card>
+                      <CardHeader><CardTitle>CA par semaine</CardTitle></CardHeader>
+                      <CardContent>
+                        {filtered.length === 0 ? <EmptyState icon="🗓" title="Pas de données"/> : weeklyRevenue.length === 0 ? <EmptyState icon="🗓" title="Pas de données"/> : (
+                          <div className="flex items-end gap-1 h-36">
+                            {weeklyRevenue.map(([label,v])=>(
+                              <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                                <div className="w-full rounded-t-md transition-all duration-500 min-h-[4px]"
+                                  style={{height:`${Math.max(4,(v/maxWeek)*120)}px`,background:v>0?'#10b981':'#f3f4f6'}}/>
+                                <span className="text-xs text-gray-400">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </div>
