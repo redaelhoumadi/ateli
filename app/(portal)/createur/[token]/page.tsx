@@ -18,7 +18,7 @@ type Stats = {
   gross: number; items: number; salesCount: number; avgTicket: number
   monthlyChart: { month: string; fullKey: string; revenue: number }[]
   topProducts: { name: string; qty: number; revenue: number }[]
-  recentSales:  { date: string; items: { name: string; qty: number; price: number }[]; total: number }[]
+  recentSales:  { date: string; items: { name: string; qty: number; price: number }[]; total: number; custom_price?: number | null; custom_price_reason?: string | null }[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -63,12 +63,18 @@ const PAY_CFG: Record<string, { label: string; icon: string; color: string; bg: 
 const getPayCfg = (method: string | null | undefined) =>
   PAY_CFG[method ?? ''] ?? null  // null = non renseigné → on masque
 
-function SaleRow({ sale }: { sale: Stats['recentSales'][number] & { payment_method?: string } }) {
+function SaleRow({ sale }: { sale: Stats['recentSales'][number] & { payment_method?: string; custom_price?: number | null; custom_price_reason?: string | null } }) {
   const [open, setOpen] = useState(false)
   const d   = new Date(sale.date)
   const pay = getPayCfg(sale.payment_method)
+  const hasCustomPrice = sale.custom_price != null
+  const catalogTotal   = sale.items.reduce((s, i) => s + i.price, 0)
+  const adjustedTotal  = hasCustomPrice ? sale.custom_price! : sale.total
+  const reduction      = hasCustomPrice ? catalogTotal - adjustedTotal : 0
+  const reductionPct   = catalogTotal > 0 && reduction > 0 ? (reduction / catalogTotal) * 100 : 0
+
   return (
-    <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white">
+    <div className={cn('border rounded-2xl overflow-hidden bg-white', hasCustomPrice ? 'border-blue-200' : 'border-gray-100')}>
       <button onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors text-left">
         <div className="w-8 h-8 bg-gray-100 rounded-xl flex items-center justify-center shrink-0 text-sm">🛍</div>
@@ -86,19 +92,59 @@ function SaleRow({ sale }: { sale: Stats['recentSales'][number] & { payment_meth
                 {pay.icon} {pay.label}
               </span>
             )}
+            {hasCustomPrice && reductionPct > 0 && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                ✏ -{reductionPct.toFixed(0)}%
+              </span>
+            )}
           </div>
         </div>
-        <p className="text-sm font-black text-gray-900 shrink-0">{fmt(sale.total)}</p>
+        <div className="text-right shrink-0">
+          {hasCustomPrice && catalogTotal !== adjustedTotal && (
+            <p className="text-xs text-gray-400 line-through">{fmt(catalogTotal)}</p>
+          )}
+          <p className={cn('text-sm font-black', hasCustomPrice ? 'text-blue-800' : 'text-gray-900')}>
+            {fmt(adjustedTotal)}
+          </p>
+        </div>
         {open ? <ChevronUp size={14} className="text-gray-400 shrink-0"/> : <ChevronDown size={14} className="text-gray-400 shrink-0"/>}
       </button>
       {open && (
         <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 space-y-1.5">
+          {/* Article list */}
           {sale.items.map((item, i) => (
             <div key={i} className="flex justify-between text-xs text-gray-600">
               <span className="truncate mr-3">{item.name} ×{item.qty}</span>
               <span className="shrink-0 font-medium">{item.price.toFixed(2)} €</span>
             </div>
           ))}
+
+          {/* Prix ajusté detail */}
+          {hasCustomPrice && (
+            <div className="border-t border-blue-100 pt-2 space-y-1">
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>Prix catalogue</span>
+                <span>{fmt(catalogTotal)}</span>
+              </div>
+              {reduction > 0 && (
+                <div className="flex justify-between text-xs text-blue-600 font-semibold">
+                  <span>Réduction ({reductionPct.toFixed(0)}%)</span>
+                  <span>-{fmt(reduction)}</span>
+                </div>
+              )}
+              {reduction < 0 && (
+                <div className="flex justify-between text-xs text-blue-600 font-semibold">
+                  <span>Supplément</span>
+                  <span>+{fmt(Math.abs(reduction))}</span>
+                </div>
+              )}
+              {sale.custom_price_reason && (
+                <p className="text-[11px] text-blue-500 italic">Raison : {sale.custom_price_reason}</p>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
           <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
             {pay ? (
               <span className="text-xs font-bold px-2.5 py-1 rounded-full"
@@ -106,9 +152,16 @@ function SaleRow({ sale }: { sale: Stats['recentSales'][number] & { payment_meth
                 {pay.icon} Payé en {pay.label}
               </span>
             ) : (
-              <span className="text-xs text-gray-400">Mode de paiement non renseigné</span>
+              <span className="text-xs text-gray-400">Mode non renseigné</span>
             )}
-            <span className="text-xs font-black text-gray-900">{fmt(sale.total)}</span>
+            <div className="text-right">
+              {hasCustomPrice && catalogTotal !== adjustedTotal && (
+                <p className="text-[11px] text-gray-400 line-through">{fmt(catalogTotal)}</p>
+              )}
+              <span className={cn('text-xs font-black', hasCustomPrice ? 'text-blue-800' : 'text-gray-900')}>
+                {fmt(adjustedTotal)}
+              </span>
+            </div>
           </div>
         </div>
       )}

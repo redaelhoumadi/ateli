@@ -8,7 +8,7 @@ import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { Button, Badge, Separator, ScrollArea, Spinner, cn } from '@/components/ui'
 
 type SaleItem = { quantity: number; unit_price: number; total_price: number; product?: { name: string; brand?: { name: string } } }
-type Sale = { id: string; total: number; total_items: number; payment_method: string; created_at: string; note?: string | null; customer?: { name: string } | null; seller?: { name: string } | null; items?: SaleItem[] }
+type Sale = { id: string; total: number; total_items: number; payment_method: string; created_at: string; note?: string | null; custom_price?: number | null; custom_price_reason?: string | null; customer?: { name: string } | null; seller?: { name: string } | null; items?: SaleItem[] }
 
 const PAY_ICON: Record<string, React.ReactNode> = {
   card:  <CreditCard size={12}/>,
@@ -62,7 +62,12 @@ function SaleRow({ sale, isLatest, onCancel }: { sale: Sale; isLatest: boolean; 
         </div>
 
         {/* Amount */}
-        <p className="text-sm font-black text-gray-900 shrink-0">{sale.total.toFixed(2)} €</p>
+        <p className="text-sm font-black text-gray-900 shrink-0">
+          {sale.total.toFixed(2)} €
+          {sale.custom_price != null && (
+            <span className="ml-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full align-middle">✏ Ajusté</span>
+          )}
+        </p>
 
         {/* Expand toggle */}
         <button onClick={() => setExpanded(!expanded)}

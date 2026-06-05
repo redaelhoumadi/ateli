@@ -295,7 +295,7 @@ export async function getPortalStats(brandId: string) {
   // Tout le CA de la marque + breakdown par mois
   const { data: salesData, error } = await supabase
     .from('sales')
-    .select('id, created_at, items:sale_items(quantity, total_price, unit_price, product:products(id, name, brand_id))')
+    .select('id, created_at, custom_price, items:sale_items(quantity, total_price, unit_price, product:products(id, name, brand_id))')
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -307,13 +307,17 @@ export async function getPortalStats(brandId: string) {
   let grossTotal = 0, itemsTotal = 0
   const byMonth  = new Map<string, number>()
   const byProduct = new Map<string, { name: string; qty: number; revenue: number }>()
-  const recentSales: { date: string; items: { name: string; qty: number; price: number }[]; total: number }[] = []
+  const recentSales: { date: string; items: { name: string; qty: number; price: number }[]; total: number; custom_price?: number | null }[] = []
 
   sales.forEach((sale: any) => {
     const brandItems = (sale.items || []).filter((i: any) => i.product?.brand_id === brandId)
     if (!brandItems.length) return
 
-    const saleRevenue = brandItems.reduce((s: number, i: any) => s + i.total_price, 0)
+    const itemsRevenue = brandItems.reduce((s: number, i: any) => s + i.total_price, 0)
+    // Si prix ajusté manuellement, utiliser custom_price pour le CA
+    const saleRevenue = (sale as any).custom_price != null
+      ? (sale as any).custom_price
+      : itemsRevenue
     grossTotal  += saleRevenue
     itemsTotal  += brandItems.reduce((s: number, i: any) => s + i.quantity, 0)
 
@@ -329,8 +333,9 @@ export async function getPortalStats(brandId: string) {
 
     if (recentSales.length < 20) {
       recentSales.push({
-        date:  sale.created_at,
-        total: saleRevenue,
+        date:             sale.created_at,
+        total:            saleRevenue,
+        custom_price:     (sale as any).custom_price ?? null,
         items: brandItems.map((i: any) => ({
           name:  i.product.name,
           qty:   i.quantity,
@@ -399,7 +404,7 @@ export async function getBrandSales(brandId: string, filters: {
 
   const { data, error } = await supabase
     .from('sales')
-    .select('id, created_at, payment_method, items:sale_items(quantity, total_price, unit_price, product:products(id, name, brand_id))')
+    .select('id, created_at, payment_method, custom_price, custom_price_reason, items:sale_items(quantity, total_price, unit_price, product:products(id, name, brand_id))')
     // Bornes en UTC : minuit local → minuit UTC du lendemain
     // On prend large (+1 jour de marge) puis on re-filtre côté JS par date locale
     // pour éviter les décalages UTC qui feraient manquer des ventes
@@ -417,7 +422,9 @@ export async function getBrandSales(brandId: string, filters: {
       return {
         id:             sale.id,
         date:           sale.created_at,
-        payment_method: sale.payment_method ?? null,
+        payment_method:      sale.payment_method ?? null,
+        custom_price:        sale.custom_price ?? null,
+        custom_price_reason: sale.custom_price_reason ?? null,
         total: brandItems.reduce((s: number, i: any) => s + i.total_price, 0),
         items: brandItems.map((i: any) => ({
           name:  i.product.name,
@@ -1193,6 +1200,8 @@ export async function createSale(sale: {
   points_used: number
   payment_method: string
   note?: string | null
+  custom_price?: number | null
+  custom_price_reason?: string | null
   items: Array<{
     product_id: string
     quantity: number

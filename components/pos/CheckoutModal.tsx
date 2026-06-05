@@ -59,13 +59,21 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
   const [gcChecking, setGcChecking] = useState(false)
   const [gcError, setGcError]       = useState('')
 
+  // Prix personnalisé
+  const [customPrice, setCustomPrice]   = useState('')
+  const [customReason, setCustomReason] = useState('')
+
   const loyPct  = loyaltyDiscountPct()
   const loyAmt  = loyaltyDiscountAmount()
   const sub     = subtotal()
   const tier    = customer ? getTierForSpend(customerTotalSpend) : null
   const manPct  = Math.min(100, Math.max(0, Number(discount) || 0))
   const manAmt  = manPct > 0 ? (sub - loyAmt) * (manPct / 100) : 0
-  const tot     = Math.max(0, sub - loyAmt - manAmt)
+  // Si prix personnalisé renseigné, il prend le dessus sur tout le reste
+  const customPriceNum = customPrice !== '' ? Math.max(0, Number(customPrice) || 0) : null
+  const tot     = customPriceNum !== null
+    ? customPriceNum
+    : Math.max(0, sub - loyAmt - manAmt)
   const change  = paymentMethod === 'cash' ? Math.max(0, Number(cash) - tot) : 0
   const gcSufficient = gcData && gcData.balance >= tot
   const mixedCardNum = Math.max(0, Number(mixedCard) || 0)
@@ -157,6 +165,8 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
         total: tot, total_items: totalItems(),
         points_earned: 0, points_used: 0, payment_method: paymentMethod,
         note: note.trim() || null,
+        custom_price: customPriceNum ?? undefined,
+        custom_price_reason: customPriceNum !== null && customReason.trim() ? customReason.trim() : undefined,
         items: items.map(i => ({ product_id: i.product.id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.total_price })),
       })
       // If paid by gift card, debit it
@@ -253,6 +263,56 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
                   </button>
                 ))}
                 {manPct > 0 && <button onClick={() => setDiscount('')} className="text-xs text-orange-400 hover:text-orange-700">✕</button>}
+              </div>
+            </div>
+
+            {/* Prix personnalisé */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Prix personnalisé</p>
+                {customPriceNum !== null && (
+                  <button onClick={() => { setCustomPrice(''); setCustomReason('') }}
+                    className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1">
+                    <X size={11}/> Retirer
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="relative flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={customPrice}
+                      onChange={e => setCustomPrice(e.target.value)}
+                      placeholder={`Calculé : ${tot.toFixed(2)}`}
+                      className={cn(
+                        'w-full border rounded-xl pl-4 pr-10 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 transition-all',
+                        customPriceNum !== null
+                          ? 'border-blue-300 bg-blue-50 focus:ring-blue-400 text-blue-900'
+                          : 'border-gray-200 focus:ring-gray-400'
+                      )}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-bold">€</span>
+                  </div>
+                </div>
+                {customPriceNum !== null && (
+                  <>
+                    <input
+                      type="text"
+                      value={customReason}
+                      onChange={e => setCustomReason(e.target.value)}
+                      placeholder="Raison (ex: erreur de prix, négociation…)"
+                      className="w-full border border-blue-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 text-blue-800"
+                    />
+                    <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
+                      <div>
+                        <span className="text-xs text-blue-600 line-through mr-2">{sub.toFixed(2)} €</span>
+                        <span className="text-xs font-bold text-blue-800">→ Prix ajusté</span>
+                      </div>
+                      <span className="text-base font-black text-blue-900">{customPriceNum.toFixed(2)} €</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -517,10 +577,21 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
                     <span>Remise -{manPct}%</span><span>-{manAmt.toFixed(2)} €</span>
                   </div>
                 )}
+                {customPriceNum !== null && (
+                  <div className="flex justify-between text-sm font-medium text-blue-600">
+                    <span>Prix ajusté manuellement</span>
+                    <span>{customPriceNum < sub ? `-${(sub - customPriceNum).toFixed(2)} €` : `+${(customPriceNum - sub).toFixed(2)} €`}</span>
+                  </div>
+                )}
                 <Separator className="my-1" />
-                <div className="flex justify-between text-base font-black text-gray-900">
-                  <span>Total à encaisser</span><span>{tot.toFixed(2)} €</span>
+                <div className={cn('flex justify-between text-base font-black',
+                  customPriceNum !== null ? 'text-blue-800' : 'text-gray-900')}>
+                  <span>Total à encaisser</span>
+                  <span>{tot.toFixed(2)} €</span>
                 </div>
+                {customPriceNum !== null && customReason.trim() && (
+                  <p className="text-xs text-blue-500 italic">Raison : {customReason}</p>
+                )}
               </div>
             </div>
 
