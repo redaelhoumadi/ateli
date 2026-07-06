@@ -1832,6 +1832,133 @@ export async function deleteLeaveRequest(id: string) {
 }
 
 
+// ─── Locations ────────────────────────────────────────────────
+
+export async function getRentals(filters?: { status?: string; brand_id?: string; product_id?: string }) {
+  let q = supabase
+    .from('rentals')
+    .select('*, product:products(id, name, reference, image_url), brand:brands(id, name), customer:customers(id, name, phone), seller:sellers(name)')
+    .order('date_from', { ascending: false })
+
+  if (filters?.status)     q = q.eq('status', filters.status)
+  if (filters?.brand_id)   q = q.eq('brand_id', filters.brand_id)
+  if (filters?.product_id) q = q.eq('product_id', filters.product_id)
+
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+// Vérifie si un produit est disponible sur une période
+export async function checkRentalAvailability(productId: string, dateFrom: string, dateTo: string, excludeRentalId?: string) {
+  let q = supabase
+    .from('rentals')
+    .select('id, date_from, date_to, status, customer_name')
+    .eq('product_id', productId)
+    .in('status', ['reserved', 'ongoing'])
+    // Chevauchement : (from <= existing.to) AND (to >= existing.from)
+    .lte('date_from', dateTo)
+    .gte('date_to', dateFrom)
+
+  if (excludeRentalId) q = q.neq('id', excludeRentalId)
+
+  const { data, error } = await q
+  if (error) throw error
+  return { available: (data || []).length === 0, conflicts: data || [] }
+}
+
+export async function createRental(data: {
+  product_id:     string
+  brand_id:       string
+  customer_id?:   string | null
+  customer_name:  string
+  customer_phone?: string | null
+  seller_id?:     string | null
+  date_from:      string
+  date_to:        string
+  rental_price:   number
+  deposit:        number
+  deposit_method: string
+  note?:          string | null
+  condition_out?: string | null
+}) {
+  // Vérifier la disponibilité avant de créer
+  const { available, conflicts } = await checkRentalAvailability(data.product_id, data.date_from, data.date_to)
+  if (!available) {
+    const c = conflicts[0] as any
+    throw new Error(`Robe déjà louée du ${c.date_from} au ${c.date_to} (${c.customer_name})`)
+  }
+
+  const { data: rental, error } = await supabase
+    .from('rentals')
+    .insert([{ ...data, status: 'reserved' }])
+    .select('*, product:products(id, name, reference, image_url), brand:brands(id, name)')
+    .single()
+  if (error) throw error
+  return rental
+}
+
+export async function updateRentalStatus(id: string, status: 'reserved' | 'ongoing' | 'returned' | 'cancelled', extra?: {
+  returned_at?:      string
+  late_fee?:         number
+  damage_fee?:       number
+  condition_in?:     string | null
+  deposit_returned?: boolean
+}) {
+  const { data, error } = await supabase
+    .from('rentals')
+    .update({ status, updated_at: new Date().toISOString(), ...(extra ?? {}) })
+    .eq('id', id)
+    .select('*, product:products(id, name, reference), brand:brands(id, name)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getRentableProducts(brandId?: string) {
+  let q = supabase
+    .from('products')
+    .select('*, brand:brands(id, name, is_active)')
+    .eq('is_rentable', true)
+    .neq('is_active', false)
+    .order('name')
+  if (brandId) q = q.eq('brand_id', brandId)
+  const { data, error } = await q
+  if (error) throw error
+  return (data || []).filter((p: any) => p.brand?.is_active !== false)
+}
+
+export async function setProductRentable(productId: string, rentable: boolean, priceDay?: number | null, deposit?: number | null) {
+  const { error } = await supabase
+    .from('products')
+    .update({
+      is_rentable:      rentable,
+      rental_price_day: priceDay ?? null,
+      rental_deposit:   deposit ?? null,
+    })
+    .eq('id', productId)
+  if (error) throw error
+}
+
+// Stats locations pour le portail créateur
+export async function getBrandRentalStats(brandId: string) {
+  const { data, error } = await supabase
+    .from('rentals')
+    .select('*, product:products(name)')
+    .eq('brand_id', brandId)
+    .order('date_from', { ascending: false })
+  if (error) throw error
+
+  const rentals   = (data || []) as any[]
+  const active    = rentals.filter(r => r.status === 'ongoing' || r.status === 'reserved')
+  const returned  = rentals.filter(r => r.status === 'returned')
+  const revenue   = returned.reduce((s, r) => s + r.rental_price + (r.late_fee ?? 0) + (r.damage_fee ?? 0), 0)
+    + rentals.filter(r => r.status === 'ongoing').reduce((s, r) => s + r.rental_price, 0)
+
+  return { rentals, activeCount: active.length, returnedCount: returned.length, revenue }
+}
+
+
 // ─── Notes équipe ─────────────────────────────────────────────
 
 export async function getNotes(filters?: { brand_id?: string; resolved?: boolean; type?: string }) {

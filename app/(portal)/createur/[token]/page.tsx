@@ -9,7 +9,7 @@ import {
   ChevronDown, ChevronUp, Calendar, Wallet, BarChart2,
   RefreshCw, AlertTriangle, Search,
 } from 'lucide-react'
-import { getBrandByToken, getPortalStats, getProductsByBrand, getReversements, getBrandSales } from '@/lib/supabase'
+import { getBrandByToken, getPortalStats, getProductsByBrand, getReversements, getBrandSales, getBrandRentalStats } from '@/lib/supabase'
 import { Spinner, cn, DatePicker } from '@/components/ui'
 import type { Brand, Product, Reversement } from '@/types'
 
@@ -174,6 +174,7 @@ const TABS = [
   { id: 'dashboard',    label: '📊 Tableau de bord' },
   { id: 'produits',     label: '📦 Mes produits' },
   { id: 'ventes',       label: '🧾 Mes ventes' },
+  { id: 'locations',    label: '👗 Locations' },
   { id: 'reversements', label: '💶 Reversements' },
 ]
 
@@ -188,7 +189,7 @@ export default function CreateurPortalPage() {
   const [loading, setLoading]         = useState(true)
   const [refreshing, setRefreshing]   = useState(false)
   const [notFound, setNotFound]       = useState(false)
-  const [tab, setTab]                 = useState<'dashboard'|'produits'|'ventes'|'reversements'>('dashboard')
+  const [tab, setTab]                 = useState<'dashboard'|'produits'|'ventes'|'locations'|'reversements'>('dashboard')
 
   // ── Filtres onglet ventes ──
   type SalesMode = 'day' | 'week' | 'month' | 'custom'
@@ -200,6 +201,8 @@ export default function CreateurPortalPage() {
   const [filteredFrom, setFilteredFrom]   = useState('')
   const [filteredTo, setFilteredTo]       = useState('')
   const [loadingSales, setLoadingSales] = useState(false)
+  const [rentalStats, setRentalStats]   = useState<any>(null)
+  const [loadingRentals, setLoadingRentals] = useState(false)
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -239,6 +242,10 @@ export default function CreateurPortalPage() {
   useEffect(() => {
     if (tab === 'ventes' && brand?.id && filteredSales === null) {
       loadSales('week', undefined, undefined, brand.id)
+    }
+    if (tab === 'locations' && brand?.id && rentalStats === null) {
+      setLoadingRentals(true)
+      getBrandRentalStats(brand.id).then(setRentalStats).catch(() => {}).finally(() => setLoadingRentals(false))
     }
   }, [tab, brand?.id]) // eslint-disable-line
 
@@ -734,6 +741,77 @@ export default function CreateurPortalPage() {
           {/* ══════════════════════════
               TAB REVERSEMENTS
           ══════════════════════════ */}
+          {/* ══════════════════════════
+              TAB LOCATIONS
+          ══════════════════════════ */}
+          {tab === 'locations' && (
+            <>
+              {loadingRentals ? (
+                <div className="flex justify-center py-12"><Spinner size="lg"/></div>
+              ) : !rentalStats || rentalStats.rentals.length === 0 ? (
+                <div className="bg-white border border-gray-100 rounded-2xl p-10 text-center">
+                  <p className="text-4xl mb-3">👗</p>
+                  <p className="text-sm font-semibold text-gray-700">Aucune location pour le moment</p>
+                  <p className="text-xs text-gray-400 mt-1">Les locations de vos articles apparaîtront ici</p>
+                </div>
+              ) : (
+                <>
+                  {/* KPIs */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center shadow-sm">
+                      <p className="text-2xl font-black text-blue-600">{rentalStats.activeCount}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Actives</p>
+                    </div>
+                    <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center shadow-sm">
+                      <p className="text-2xl font-black text-green-600">{rentalStats.returnedCount}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Terminées</p>
+                    </div>
+                    <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center shadow-sm">
+                      <p className="text-2xl font-black text-gray-900">{rentalStats.revenue.toFixed(0)} €</p>
+                      <p className="text-xs text-gray-400 mt-0.5">CA locations</p>
+                    </div>
+                  </div>
+
+                  {/* Rental list */}
+                  <div className="space-y-3">
+                    {rentalStats.rentals.map((r: any) => {
+                      const cfg: Record<string, {label:string;color:string;bg:string}> = {
+                        reserved:  { label: '📅 Réservée',  color: '#D97706', bg: '#FFFBEB' },
+                        ongoing:   { label: '👗 En cours',  color: '#2563EB', bg: '#EFF6FF' },
+                        returned:  { label: '✅ Retournée', color: '#059669', bg: '#ECFDF5' },
+                        cancelled: { label: '✕ Annulée',    color: '#9CA3AF', bg: '#F9FAFB' },
+                      }
+                      const st = cfg[r.status] ?? cfg.reserved
+                      const total = r.rental_price + (r.late_fee ?? 0) + (r.damage_fee ?? 0)
+                      return (
+                        <div key={r.id} className="bg-white border border-gray-100 rounded-2xl px-4 py-3.5 flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-bold text-gray-900 truncate">{r.product?.name ?? 'Article'}</p>
+                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                                style={{ color: st.color, background: st.bg }}>
+                                {st.label}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {new Date(r.date_from + 'T12:00:00').toLocaleDateString('fr-FR', {day:'numeric',month:'short'})}
+                              {' → '}
+                              {new Date(r.date_to + 'T12:00:00').toLocaleDateString('fr-FR', {day:'numeric',month:'short'})}
+                              {(r.late_fee > 0 || r.damage_fee > 0) && (
+                                <span className="text-red-500 ml-1.5">+ pénalités</span>
+                              )}
+                            </p>
+                          </div>
+                          <p className="text-sm font-black text-gray-900 shrink-0">{total.toFixed(2)} €</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
           {tab === 'reversements' && (
             <>
               {/* Summary */}

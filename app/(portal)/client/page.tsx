@@ -30,6 +30,72 @@ type CustomerData = {
 const TIER_ICONS: Record<string, string> = { bronze:'🥉', silver:'🥈', gold:'🥇', vip:'💜' }
 
 // ── Tier badge ────────────────────────────────────────────────
+// ─── Wallet Buttons ───────────────────────────────────────────
+function WalletButtons({ customerId }: { customerId: string }) {
+  const [loading, setLoading] = useState<'apple'|'google'|null>(null)
+  const [added, setAdded]     = useState<'apple'|'google'|null>(null)
+  const isIOS     = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent)
+  const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)
+  const isMobile  = isIOS || isAndroid
+
+  const handleApple = async () => {
+    setLoading('apple')
+    try {
+      const res  = await fetch(`/api/wallet/apple?customer_id=${customerId}`)
+      if (!res.ok) throw new Error('Erreur')
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a'); a.href = url; a.download = 'ateli-fidelite.pkpass'; a.click()
+      URL.revokeObjectURL(url)
+      setAdded('apple')
+    } catch { } finally { setLoading(null) }
+  }
+
+  const handleGoogle = async () => {
+    setLoading('google')
+    try {
+      const res  = await fetch(`/api/wallet/google?customer_id=${customerId}`)
+      const data = await res.json()
+      if (data.url) { window.open(data.url, '_blank'); setAdded('google') }
+    } catch { } finally { setLoading(null) }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold text-gray-500 text-center uppercase tracking-wide">Ajouter à ton wallet</p>
+      <div className={`flex gap-2 ${isMobile ? 'flex-col' : 'flex-row'}`}>
+        {(!isMobile || isIOS) && (
+          <button onClick={handleApple} disabled={loading === 'apple'}
+            className="flex-1 flex items-center justify-center gap-2.5 bg-black text-white rounded-2xl px-4 py-3.5 text-sm font-bold hover:bg-gray-900 active:scale-[0.98] transition-all disabled:opacity-60">
+            {loading === 'apple' ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> :
+             added === 'apple' ? <><span>✓</span> Ajouté</> : <>
+              <svg width="17" height="17" viewBox="0 0 814 1000" fill="currentColor">
+                <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-37.3-151.1-99.3C27.2 710.9 0 625.3 0 542.4 0 372.8 118.2 242 280.5 242c75.8 0 127.8 44.5 177.5 44.5 47.6 0 108.2-47.6 194.2-47.6z"/>
+                <path d="M549.8 65.5C558 36.2 580.1 10.5 609 0c-.6 3.8-.6 7.5-.6 11.3 0 79.1-57.9 144.5-126.2 144.5-2.6 0-5.8-.6-7.5-.6 8.3-31.9 36.3-59.7 74.1-89.7z"/>
+              </svg>
+              Apple Wallet
+            </>}
+          </button>
+        )}
+        {(!isMobile || isAndroid) && (
+          <button onClick={handleGoogle} disabled={loading === 'google'}
+            className="flex-1 flex items-center justify-center gap-2.5 bg-white border-2 border-gray-200 text-gray-800 rounded-2xl px-4 py-3.5 text-sm font-bold hover:border-gray-400 active:scale-[0.98] transition-all disabled:opacity-60">
+            {loading === 'google' ? <div className="w-4 h-4 border-2 border-gray-200 border-t-gray-700 rounded-full animate-spin"/> :
+             added === 'google' ? <><span>✓</span> Ajouté</> : <>
+              <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.7 1.3 9.1 3.4l6.9-6.9C35.9 2.5 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l8.1 6.3C12.5 13.2 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.5-.1-3-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/><path fill="#FBBC05" d="M10.7 28.6C10.3 27.4 10 26.2 10 25s.3-2.4.7-3.6L2.6 15C.9 18.3 0 21.5 0 25s.9 6.7 2.6 10l8.1-6.4z"/><path fill="#34A853" d="M24 50c6.3 0 11.6-2.1 15.5-5.7l-7.5-5.8c-2.1 1.4-4.7 2.2-8 2.2-6.2 0-11.5-3.7-13.3-9.1l-8.1 6.4C6.6 45.6 14.6 50 24 50z"/></svg>
+              Google Wallet
+            </>}
+          </button>
+        )}
+      </div>
+      <p className="text-[11px] text-gray-400 text-center leading-relaxed">
+        Présentez cette carte en boutique · Mise à jour automatique après chaque achat
+      </p>
+    </div>
+  )
+}
+
+// ─── Tier badge ───────────────────────────────────────────────
 function TierBadge({ tier }: { tier: (typeof REWARDS_TIERS)[number] }) {
   return (
     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border"
@@ -480,6 +546,11 @@ export default function CustomerPortalPage() {
                     </p>
                   </div>
                 )}
+
+                {/* Wallet buttons */}
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                  <WalletButtons customerId={data.customer.id}/>
+                </div>
               </div>
             )}
 

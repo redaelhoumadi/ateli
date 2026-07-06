@@ -27,8 +27,9 @@ type ProductForm = {
   name: string; reference: string; price: string
   discount: string; brand_id: string; image_url: string | null
   stock: string; stock_min: string; barcode: string
+  is_rentable: boolean; rental_price_day: string; rental_deposit: string
 }
-const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null, stock: '', stock_min: '3', barcode: '' }
+const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null, stock: '', stock_min: '3', barcode: '', is_rentable: false, rental_price_day: '', rental_deposit: '' }
 
 // ─── Print barcode label ──────────────────────────────────────
 function printBarcode(code: string, productName: string, reference: string) {
@@ -169,7 +170,7 @@ export default function ProduitsPage() {
 
   // CRUD
   const openAdd  = () => { setForm({ ...emptyForm, brand_id: brands[0]?.id || '' }); setError(''); setModal('add') }
-  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '' }); setError(''); setModal('edit') }
+  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '', is_rentable: (p as any).is_rentable ?? false, rental_price_day: (p as any).rental_price_day != null ? String((p as any).rental_price_day) : '', rental_deposit: (p as any).rental_deposit != null ? String((p as any).rental_deposit) : '' }); setError(''); setModal('edit') }
   const openDelete = (p: Product) => { setDeleteTarget(p); setDeleteMode(null); setError(''); setModal('delete') }
   const closeModal = () => { setModal(null); setEditTarget(null); setDeleteTarget(null); setError('') }
 
@@ -193,7 +194,7 @@ export default function ProduitsPage() {
       // Générer un EAN-13 si aucun barcode et que c'est une création
       const barcodeVal = form.barcode.trim()
         || (modal === 'add' ? generateEAN13(form.brand_id, form.reference.trim()) : '')
-      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url, stock: stockVal, stock_min: form.stock_min !== '' ? Number(form.stock_min) : 3, barcode: barcodeVal || null }
+      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url, stock: stockVal, stock_min: form.stock_min !== '' ? Number(form.stock_min) : 3, barcode: barcodeVal || null, is_rentable: form.is_rentable, rental_price_day: form.is_rentable && form.rental_price_day !== '' ? Number(form.rental_price_day) : null, rental_deposit: form.is_rentable && form.rental_deposit !== '' ? Number(form.rental_deposit) : null }
       if (modal === 'add') {
         const created = await createProduct(payload)
         setProducts(prev => [...prev, created as Product].sort((a,b) => a.name.localeCompare(b.name)))
@@ -607,6 +608,40 @@ export default function ProduitsPage() {
                     </div>
                   )
                 })()}</div>
+
+              {/* ── Location ── */}
+              <div className={cn('rounded-xl border-2 p-4 space-y-3 transition-all',
+                form.is_rentable ? 'border-purple-200 bg-purple-50' : 'border-gray-100 bg-gray-50')}>
+                <button type="button" onClick={() => setForm({...form, is_rentable: !form.is_rentable})}
+                  className="w-full flex items-center justify-between">
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-gray-900">👗 Disponible à la location</p>
+                    <p className="text-xs text-gray-500">Robes de soirée, accessoires événementiels…</p>
+                  </div>
+                  <span className={cn('w-11 h-6 rounded-full relative transition-all shrink-0',
+                    form.is_rentable ? 'bg-purple-500' : 'bg-gray-300')}>
+                    <span className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all',
+                      form.is_rentable ? 'left-[22px]' : 'left-0.5')}/>
+                  </span>
+                </button>
+                {form.is_rentable && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Prix / jour (€)</Label>
+                      <Input type="number" min="0" step="0.01" placeholder="25.00"
+                        value={form.rental_price_day}
+                        onChange={e => setForm({...form, rental_price_day: e.target.value})}/>
+                    </div>
+                    <div>
+                      <Label>Caution suggérée (€)</Label>
+                      <Input type="number" min="0" step="0.01" placeholder="150.00"
+                        value={form.rental_deposit}
+                        onChange={e => setForm({...form, rental_deposit: e.target.value})}/>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <Label>Marque <span className="text-red-400">*</span></Label>
                 <div className="flex gap-2">
