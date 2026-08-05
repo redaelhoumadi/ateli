@@ -86,8 +86,8 @@ export function Cart({ onCheckout, onClose, isMobile }: { onCheckout: () => void
             <div className="px-4 space-y-2">
               {items.map(item => (
                 <CartItemRow key={item.product.id} item={item}
-                  onQty={qty => updateQuantity(item.product.id, qty)}
-                  onRemove={() => removeItem(item.product.id)} />
+                  onQty={qty => updateQuantity(item.product.id, qty, item.variant?.id ?? null)}
+                  onRemove={() => removeItem(item.product.id, item.variant?.id ?? null)} />
               ))}
             </div>
           ) : brandGroups.map(group => {
@@ -111,8 +111,8 @@ export function Cart({ onCheckout, onClose, isMobile }: { onCheckout: () => void
                   style={{ background: `${p.bg}88`, borderColor: p.dot, borderRight: `1px solid ${p.border}`, borderBottom: `1px solid ${p.border}` }}>
                   {group.items.map(item => (
                     <CartItemRow key={item.product.id} item={item} compact hideBrand
-                      onQty={qty => updateQuantity(item.product.id, qty)}
-                      onRemove={() => removeItem(item.product.id)} />
+                      onQty={qty => updateQuantity(item.product.id, qty, item.variant?.id ?? null)}
+                      onRemove={() => removeItem(item.product.id, item.variant?.id ?? null)} />
                   ))}
                 </div>
               </div>
@@ -200,7 +200,7 @@ function CartItemRow({ item, onQty, onRemove, compact = false, hideBrand = false
     <div className={cn('flex items-start gap-2.5', compact ? 'px-3 py-2.5' : 'bg-gray-50 rounded-xl p-3')}>
       <div className="flex-1 min-w-0">
         {!hideBrand && <p className="text-xs text-gray-400 truncate mb-0.5">{item.product.brand?.name}</p>}
-        <p className={cn('font-medium text-gray-900 truncate', compact ? 'text-xs' : 'text-sm')}>{item.product.name}</p>
+        <p className={cn('font-medium text-gray-900 truncate', compact ? 'text-xs' : 'text-sm')}>{item.product.name}{item.variant && <span className="ml-1.5 text-[10px] font-black bg-gray-900 text-white px-1.5 py-0.5 rounded-md align-middle">{item.variant.size}</span>}</p>
         <p className="text-xs text-gray-400 mt-0.5">{item.unit_price.toFixed(2)} € /u</p>
       </div>
       <div className="flex flex-col items-end gap-1.5 shrink-0">

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { CartItem, Customer, Product } from '@/types'
+import type { CartItem, Customer, Product, ProductVariant } from '@/types'
 import { getTierForSpend } from '@/lib/customerPortal'
 
 type CartStore = {
@@ -10,9 +10,9 @@ type CartStore = {
   paymentMethod:      string
   sellerId:           string
 
-  addItem:           (product: Product) => void
-  removeItem:        (productId: string) => void
-  updateQuantity:    (productId: string, qty: number) => void
+  addItem:           (product: Product, variant?: ProductVariant | null) => void
+  removeItem:        (productId: string, variantId?: string | null) => void
+  updateQuantity:    (productId: string, qty: number, variantId?: string | null) => void
   clearCart:         () => void
   setCustomer:       (customer: Customer | null, totalSpend?: number) => void
   setPaymentMethod:  (method: string) => void
@@ -35,30 +35,35 @@ export const useCartStore = create<CartStore>()(
       paymentMethod:      'card',
       sellerId:           '',
 
-      addItem: (product) => {
-        const items    = get().items
-        const existing = items.find(i => i.product.id === product.id)
+      addItem: (product, variant = null) => {
+        const items = get().items
+        // Clé unique = produit + variante (deux tailles = deux lignes)
+        const match = (i: CartItem) =>
+          i.product.id === product.id && (i.variant?.id ?? null) === (variant?.id ?? null)
+        const existing = items.find(match)
+        // Prix : variante > produit, avec remise produit appliquée
+        const basePrice = variant?.price ?? product.price
         const unitPrice = product.discount
-          ? product.price * (1 - product.discount / 100)
-          : product.price
+          ? basePrice * (1 - product.discount / 100)
+          : basePrice
 
         if (existing) {
           set({
             items: items.map(i =>
-              i.product.id === product.id
+              match(i)
                 ? { ...i, quantity: i.quantity + 1, total_price: (i.quantity + 1) * i.unit_price }
                 : i
             ),
           })
         } else {
           set({
-            items: [...items, { product, quantity: 1, unit_price: unitPrice, total_price: unitPrice }],
+            items: [...items, { product, variant, quantity: 1, unit_price: unitPrice, total_price: unitPrice }],
           })
         }
       },
 
-      removeItem: (productId) =>
-        set({ items: get().items.filter(i => i.product.id !== productId) }),
+      removeItem: (productId, variantId = null) =>
+        set({ items: get().items.filter(i => !(i.product.id === productId && (i.variant?.id ?? null) === variantId)) }),
 
       updateQuantity: (productId, qty) => {
         if (qty <= 0) { get().removeItem(productId); return }

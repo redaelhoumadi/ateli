@@ -123,8 +123,18 @@ export type SaleItem = {
   product?: Product
 }
 
+export type ProductVariant = {
+  id:         string
+  product_id: string
+  size:       string
+  stock:      number
+  price:      number | null
+  position:   number
+}
+
 export type CartItem = {
   product: Product
+  variant?: ProductVariant | null   // taille sélectionnée si le produit a des variantes
   quantity: number
   unit_price: number
   total_price: number

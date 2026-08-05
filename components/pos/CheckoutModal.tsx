@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { CreditCard, Banknote, Shuffle, X, Gift, CheckCircle, AlertTriangle, Wallet } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
-import { createSale, checkStockAvailability, getGiftCardByCode, useGiftCard, addCustomerCredit } from '@/lib/supabase'
+import { createSale, checkStockAvailability, getGiftCardByCode, useGiftCard, addCustomerCredit, decrementVariantStock } from '@/lib/supabase'
 import { addPendingSale, generateOfflineId } from '@/lib/offlineDB'
 import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { getTierForSpend } from '@/lib/customerPortal'
@@ -167,8 +167,14 @@ export function CheckoutModal({ onClose, onSuccess }: { onClose: () => void; onS
         note: note.trim() || null,
         custom_price: customPriceNum ?? undefined,
         custom_price_reason: customPriceNum !== null && customReason.trim() ? customReason.trim() : undefined,
-        items: items.map(i => ({ product_id: i.product.id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.total_price })),
+        items: items.map(i => ({ product_id: i.product.id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.total_price, variant_size: i.variant?.size ?? null } as any)),
       })
+      // Décrémenter le stock des variantes tailles
+      for (const i of items) {
+        if (i.variant?.id) {
+          decrementVariantStock(i.variant.id, i.quantity).catch(() => {})
+        }
+      }
       // If paid by gift card, debit it
       if (paymentMethod === 'gift_card' && gcData) {
         await useGiftCard({ gift_card_id: gcData.id, sale_id: (sale as any).id, amount: tot })

@@ -11,6 +11,7 @@ import {
   getAllProducts, getBrands, createProduct, updateProduct,
   deleteProduct, archiveProduct, restoreProduct, createBrand,
   uploadProductImage, deleteProductImage, updateStock, optimizeImageUrl,
+  getProductVariants, saveProductVariants,
 } from '@/lib/supabase'
 import { ProductImageUpload } from '@/components/ui/ProductImageUpload'
 import {
@@ -79,6 +80,7 @@ export default function ProduitsPage() {
   const [editTarget, setEditTarget] = useState<Product|null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Product|null>(null)
   const [deleteMode, setDeleteMode] = useState<'confirm'|'linked'|null>(null)
+  const [variants, setVariants] = useState<Array<{ id?: string; size: string; stock: string; price: string }>>([])
   const [form, setForm]             = useState<ProductForm>(emptyForm)
   const [newBrandName, setNewBrandName] = useState('')
   const [saving, setSaving]         = useState(false)
@@ -169,8 +171,8 @@ export default function ProduitsPage() {
   }
 
   // CRUD
-  const openAdd  = () => { setForm({ ...emptyForm, brand_id: brands[0]?.id || '' }); setError(''); setModal('add') }
-  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '', is_rentable: (p as any).is_rentable ?? false, rental_price_day: (p as any).rental_price_day != null ? String((p as any).rental_price_day) : '', rental_deposit: (p as any).rental_deposit != null ? String((p as any).rental_deposit) : '' }); setError(''); setModal('edit') }
+  const openAdd  = () => { setForm({ ...emptyForm, brand_id: brands[0]?.id || '' }); setVariants([]); setError(''); setModal('add') }
+  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '', is_rentable: (p as any).is_rentable ?? false, rental_price_day: (p as any).rental_price_day != null ? String((p as any).rental_price_day) : '', rental_deposit: (p as any).rental_deposit != null ? String((p as any).rental_deposit) : '' }); setError(''); setModal('edit'); getProductVariants(p.id).then(vs => setVariants((vs as any[]).map(v => ({ id: v.id, size: v.size, stock: String(v.stock), price: v.price != null ? String(v.price) : '' })))).catch(() => setVariants([])) }
   const openDelete = (p: Product) => { setDeleteTarget(p); setDeleteMode(null); setError(''); setModal('delete') }
   const closeModal = () => { setModal(null); setEditTarget(null); setDeleteTarget(null); setError('') }
 
@@ -197,9 +199,22 @@ export default function ProduitsPage() {
       const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url, stock: stockVal, stock_min: form.stock_min !== '' ? Number(form.stock_min) : 3, barcode: barcodeVal || null, is_rentable: form.is_rentable, rental_price_day: form.is_rentable && form.rental_price_day !== '' ? Number(form.rental_price_day) : null, rental_deposit: form.is_rentable && form.rental_deposit !== '' ? Number(form.rental_deposit) : null }
       if (modal === 'add') {
         const created = await createProduct(payload)
+        // Sauvegarder les variantes tailles
+        const validVariants = variants.filter(v => v.size.trim())
+        if (validVariants.length) {
+          await saveProductVariants((created as Product).id, validVariants.map(v => ({
+            id: v.id, size: v.size, stock: Number(v.stock) || 0,
+            price: v.price !== '' ? Number(v.price) : null,
+          })))
+        }
         setProducts(prev => [...prev, created as Product].sort((a,b) => a.name.localeCompare(b.name)))
       } else if (editTarget) {
         const updated = await updateProduct(editTarget.id, payload)
+        // Sauvegarder les variantes tailles (remplace tout)
+        await saveProductVariants(editTarget.id, variants.filter(v => v.size.trim()).map(v => ({
+          id: v.id, size: v.size, stock: Number(v.stock) || 0,
+          price: v.price !== '' ? Number(v.price) : null,
+        })))
         setProducts(prev => prev.map(p => p.id === editTarget.id ? updated as Product : p))
       }
       closeModal()
@@ -699,6 +714,72 @@ export default function ProduitsPage() {
                     {Number(form.stock) === 0 ? '🔴 Épuisé — non affiché en caisse' :
                      Number(form.stock) <= Number(form.stock_min || 3) ? `🟠 Stock bas — badge affiché en caisse (${form.stock} restant${Number(form.stock) > 1 ? 's' : ''})` :
                      `🟢 En stock (${form.stock} unité${Number(form.stock) > 1 ? 's' : ''})`}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Tailles / variantes ── */}
+              <div className={cn('rounded-xl border-2 p-4 space-y-3 transition-all',
+                variants.length > 0 ? 'border-teal-200 bg-teal-50' : 'border-gray-100 bg-gray-50')}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">📏 Tailles & quantités</p>
+                    <p className="text-xs text-gray-500">Stock par taille, prix spécifique optionnel</p>
+                  </div>
+                  <button type="button"
+                    onClick={() => setVariants(v => [...v, { size: '', stock: '0', price: '' }])}
+                    className="flex items-center gap-1 text-xs font-bold text-teal-700 bg-white border border-teal-200 px-3 py-1.5 rounded-xl hover:bg-teal-100 transition-all">
+                    <Plus size={12}/> Taille
+                  </button>
+                </div>
+
+                {variants.length > 0 && (
+                  <div className="space-y-2">
+                    {/* Presets rapides */}
+                    {variants.length === 1 && !variants[0].size && (
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[['XS','S','M','L','XL'], ['34','36','38','40','42','44'], ['Unique']].map((preset, pi) => (
+                          <button key={pi} type="button"
+                            onClick={() => setVariants(preset.map(s => ({ size: s, stock: '0', price: '' })))}
+                            className="text-xs font-semibold text-gray-500 bg-white border border-gray-200 px-2.5 py-1 rounded-lg hover:border-teal-400 hover:text-teal-700 transition-all">
+                            {preset.join(' · ')}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {/* Header row */}
+                    <div className="grid grid-cols-[1fr_80px_100px_28px] gap-2 text-[10px] font-bold text-gray-400 uppercase px-1">
+                      <span>Taille</span><span>Qté</span><span>Prix (opt.)</span><span/>
+                    </div>
+                    {variants.map((v, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_80px_100px_28px] gap-2 items-center">
+                        <Input value={v.size} placeholder="M / 38 / Unique"
+                          onChange={e => setVariants(vs => vs.map((x, xi) => xi === i ? { ...x, size: e.target.value.toUpperCase() } : x))}
+                          className="font-mono text-center"/>
+                        <Input type="number" min="0" value={v.stock}
+                          onChange={e => setVariants(vs => vs.map((x, xi) => xi === i ? { ...x, stock: e.target.value } : x))}
+                          className="text-center"/>
+                        <Input type="number" min="0" step="0.01" value={v.price}
+                          placeholder={form.price || '—'}
+                          onChange={e => setVariants(vs => vs.map((x, xi) => xi === i ? { ...x, price: e.target.value } : x))}
+                          className="text-center"/>
+                        <button type="button"
+                          onClick={() => setVariants(vs => vs.filter((_, xi) => xi !== i))}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-white transition-all">
+                          <Trash2 size={12}/>
+                        </button>
+                      </div>
+                    ))}
+                    {/* Total stock */}
+                    <div className="flex justify-between text-xs pt-1 border-t border-teal-100">
+                      <span className="text-gray-500">Stock total tailles</span>
+                      <span className="font-black text-teal-800">
+                        {variants.reduce((s, v) => s + (Number(v.stock) || 0), 0)} unités
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400">
+                      💡 Prix vide = prix du produit ({form.price || '0'} €). Le stock global ci-dessus devient facultatif.
+                    </p>
                   </div>
                 )}
               </div>

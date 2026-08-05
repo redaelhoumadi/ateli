@@ -1207,6 +1207,7 @@ export async function createSale(sale: {
     quantity: number
     unit_price: number
     total_price: number
+    variant_size?: string | null
   }>
 }) {
   const { items, ...saleData } = sale
@@ -1828,6 +1829,79 @@ export async function reviewLeaveRequest(id: string, status: 'approved' | 'rejec
 
 export async function deleteLeaveRequest(id: string) {
   const { error } = await supabase.from('leave_requests').delete().eq('id', id)
+  if (error) throw error
+}
+
+
+// ─── Variantes tailles ────────────────────────────────────────
+
+export async function getProductVariants(productId: string) {
+  const { data, error } = await supabase
+    .from('product_variants')
+    .select('*')
+    .eq('product_id', productId)
+    .order('position')
+  if (error) throw error
+  return data || []
+}
+
+// Récupère les variantes de plusieurs produits d'un coup (pour le POS)
+export async function getVariantsForProducts(productIds: string[]) {
+  if (!productIds.length) return {}
+  const { data, error } = await supabase
+    .from('product_variants')
+    .select('*')
+    .in('product_id', productIds)
+    .order('position')
+  if (error) throw error
+  const map: Record<string, any[]> = {}
+  for (const v of (data || []) as any[]) {
+    if (!map[v.product_id]) map[v.product_id] = []
+    map[v.product_id].push(v)
+  }
+  return map
+}
+
+// Remplace toutes les variantes d'un produit (upsert intelligent)
+export async function saveProductVariants(productId: string, variants: Array<{
+  id?:    string
+  size:   string
+  stock:  number
+  price:  number | null
+}>) {
+  // 1. Supprimer les variantes retirées
+  const { data: existing } = await supabase
+    .from('product_variants')
+    .select('id')
+    .eq('product_id', productId)
+  const keepIds = variants.filter(v => v.id).map(v => v.id)
+  const toDelete = ((existing || []) as any[]).filter(e => !keepIds.includes(e.id)).map(e => e.id)
+  if (toDelete.length) {
+    await supabase.from('product_variants').delete().in('id', toDelete)
+  }
+
+  // 2. Upsert les variantes courantes
+  const rows = variants.map((v, i) => ({
+    ...(v.id ? { id: v.id } : {}),
+    product_id: productId,
+    size:       v.size.trim(),
+    stock:      v.stock,
+    price:      v.price,
+    position:   i,
+  }))
+  if (rows.length) {
+    const { error } = await supabase
+      .from('product_variants')
+      .upsert(rows, { onConflict: 'product_id,size' })
+    if (error) throw error
+  }
+}
+
+export async function decrementVariantStock(variantId: string, qty: number) {
+  const { error } = await supabase.rpc('decrement_variant_stock', {
+    p_variant_id: variantId,
+    p_qty:        qty,
+  })
   if (error) throw error
 }
 

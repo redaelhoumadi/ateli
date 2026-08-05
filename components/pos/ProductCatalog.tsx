@@ -1,20 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useCartStore } from '@/hooks/useCart'
-import { getProducts, getBrands, searchProducts, applyActivePromotions, optimizeImageUrl } from '@/lib/supabase'
+import { getProducts, getBrands, searchProducts, applyActivePromotions, optimizeImageUrl, getVariantsForProducts } from '@/lib/supabase'
 import { cacheProducts, cacheBrands, getCachedProducts, getCachedBrands } from '@/lib/offlineDB'
 import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { Input, Badge, Spinner, cn } from '@/components/ui'
 import { getStockStatus } from '@/types'
-import type { Product, Brand } from '@/types'
+import type { Product, Brand, ProductVariant } from '@/types'
 import NextImage from 'next/image'
 
 export function ProductCatalog() {
   const [products, setProducts]       = useState<Product[]>([])
   const [brands, setBrands]           = useState<Brand[]>([])
   const { isOnline }                  = useOfflineSync()
+  const [variantsMap, setVariantsMap] = useState<Record<string, ProductVariant[]>>({})
+  const [sizePicker, setSizePicker]   = useState<Product | null>(null)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [search, setSearch]           = useState('')
   const [loading, setLoading]         = useState(false)
@@ -47,6 +49,12 @@ export function ProductCatalog() {
         setProducts(data || [])
         if (navigator.onLine && !search.trim() && !selectedBrand) {
           cacheProducts(data || []).catch(() => {})
+        }
+        // Charger les variantes tailles pour ces produits
+        if (navigator.onLine && (data || []).length) {
+          getVariantsForProducts((data || []).map((p: any) => p.id))
+            .then(m => setVariantsMap(m as Record<string, ProductVariant[]>))
+            .catch(() => {})
         }
       } finally { setLoading(false) }
     }, 200)
@@ -105,7 +113,12 @@ export function ProductCatalog() {
                   onClick={() => {
                     const status = getStockStatus(p)
                     if (status === 'out') return
-                    addItem(p)
+                    const vars = variantsMap[p.id]
+                    if (vars && vars.length > 0) {
+                      setSizePicker(p)   // ouvrir le sélecteur de taille
+                    } else {
+                      addItem(p)
+                    }
                   }}
                   className={cn(
                     "group bg-white rounded-2xl border text-left transition-all overflow-hidden flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900",
@@ -169,6 +182,48 @@ export function ProductCatalog() {
                 </button>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sélecteur de taille ── */}
+      {sizePicker && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setSizePicker(null)}>
+          <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <p className="font-bold text-gray-900">{sizePicker.name}</p>
+                <p className="text-xs text-gray-400">Choisissez une taille</p>
+              </div>
+              <button onClick={() => setSizePicker(null)} className="text-gray-400 hover:text-gray-700">
+                <X size={18}/>
+              </button>
+            </div>
+            <div className="p-5 grid grid-cols-3 gap-2">
+              {(variantsMap[sizePicker.id] || []).map(v => {
+                const basePrice = v.price ?? sizePicker.price
+                const finalP = sizePicker.discount ? basePrice * (1 - sizePicker.discount / 100) : basePrice
+                const out = v.stock <= 0
+                return (
+                  <button key={v.id} disabled={out}
+                    onClick={() => { addItem(sizePicker, v); setSizePicker(null) }}
+                    className={cn('flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 transition-all',
+                      out
+                        ? 'border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed'
+                        : 'border-gray-200 hover:border-gray-900 hover:shadow-md active:scale-[0.96]')}>
+                    <span className="text-base font-black text-gray-900">{v.size}</span>
+                    <span className="text-xs font-semibold text-gray-500">{finalP.toFixed(2)} €</span>
+                    <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                      out ? 'bg-red-50 text-red-500' :
+                      v.stock <= 2 ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600')}>
+                      {out ? 'Épuisé' : `${v.stock} dispo`}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
