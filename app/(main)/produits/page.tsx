@@ -26,11 +26,11 @@ import type { Product, Brand } from '@/types'
 
 type ProductForm = {
   name: string; reference: string; price: string
-  discount: string; brand_id: string; image_url: string | null
+  discount: string; discountMode: 'pct'|'eur'; brand_id: string; image_url: string | null
   stock: string; stock_min: string; barcode: string
   is_rentable: boolean; rental_price_day: string; rental_deposit: string
 }
-const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', brand_id: '', image_url: null, stock: '', stock_min: '3', barcode: '', is_rentable: false, rental_price_day: '', rental_deposit: '' }
+const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', discountMode: 'pct', brand_id: '', image_url: null, stock: '', stock_min: '3', barcode: '', is_rentable: false, rental_price_day: '', rental_deposit: '' }
 
 // ─── Print barcode label ──────────────────────────────────────
 function printBarcode(code: string, productName: string, reference: string) {
@@ -172,7 +172,7 @@ export default function ProduitsPage() {
 
   // CRUD
   const openAdd  = () => { setForm({ ...emptyForm, brand_id: brands[0]?.id || '' }); setVariants([]); setError(''); setModal('add') }
-  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '', is_rentable: (p as any).is_rentable ?? false, rental_price_day: (p as any).rental_price_day != null ? String((p as any).rental_price_day) : '', rental_deposit: (p as any).rental_deposit != null ? String((p as any).rental_deposit) : '' }); setError(''); setModal('edit'); getProductVariants(p.id).then(vs => setVariants((vs as any[]).map(v => ({ id: v.id, size: v.size, stock: String(v.stock), price: v.price != null ? String(v.price) : '' })))).catch(() => setVariants([])) }
+  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', discountMode: 'pct', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '', is_rentable: (p as any).is_rentable ?? false, rental_price_day: (p as any).rental_price_day != null ? String((p as any).rental_price_day) : '', rental_deposit: (p as any).rental_deposit != null ? String((p as any).rental_deposit) : '' }); setError(''); setModal('edit'); getProductVariants(p.id).then(vs => setVariants((vs as any[]).map(v => ({ id: v.id, size: v.size, stock: String(v.stock), price: v.price != null ? String(v.price) : '' })))).catch(() => setVariants([])) }
   const openDelete = (p: Product) => { setDeleteTarget(p); setDeleteMode(null); setError(''); setModal('delete') }
   const closeModal = () => { setModal(null); setEditTarget(null); setDeleteTarget(null); setError('') }
 
@@ -188,7 +188,18 @@ export default function ProduitsPage() {
     if (!form.reference.trim()) return setError('La référence est obligatoire')
     if (!form.price || isNaN(Number(form.price))) return setError('Prix invalide')
     if (!form.brand_id) return setError('Sélectionnez une marque')
-    const disc = form.discount !== '' && !isNaN(Number(form.discount)) ? Number(form.discount) : null
+    // Convertir la remise en % (le stockage est toujours en %)
+    let disc: number | null = null
+    if (form.discount !== '' && !isNaN(Number(form.discount))) {
+      const raw = Number(form.discount)
+      if (form.discountMode === 'eur') {
+        // Remise en euros → convertir en %
+        const priceNum = Number(form.price) || 0
+        disc = priceNum > 0 ? Math.min(100, Math.max(0, (raw / priceNum) * 100)) : 0
+      } else {
+        disc = raw
+      }
+    }
     if (disc != null && (disc < 0 || disc > 100)) return setError('Remise entre 0 et 100 %')
     setSaving(true); setError('')
     try {
@@ -673,19 +684,59 @@ export default function ProduitsPage() {
                   <Input type="number" placeholder="0.00" min="0" step="0.01" value={form.price} onChange={e => setForm({...form, price: e.target.value})}/>
                 </div>
                 <div>
-                  <Label>Remise (%)</Label>
-                  <Input type="number" placeholder="0" min="0" max="100" value={form.discount} onChange={e => setForm({...form, discount: e.target.value})}/>
-                </div>
-              </div>
-              {form.price && Number(form.price) > 0 && (
-                <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Prix affiché en caisse</span>
-                  <div className="flex items-baseline gap-2">
-                    {Number(form.discount) > 0 && <span className="text-sm text-gray-400 line-through">{Number(form.price).toFixed(2)} €</span>}
-                    <span className="text-lg font-black text-gray-900">{(Number(form.price)*(1-(Number(form.discount)||0)/100)).toFixed(2)} €</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label>Remise</Label>
+                    <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                      <button type="button" onClick={() => setForm({...form, discountMode: 'pct'})}
+                        className={cn('px-2.5 py-1 rounded-md text-xs font-bold transition-all',
+                          form.discountMode === 'pct' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400')}>
+                        %
+                      </button>
+                      <button type="button" onClick={() => setForm({...form, discountMode: 'eur'})}
+                        className={cn('px-2.5 py-1 rounded-md text-xs font-bold transition-all',
+                          form.discountMode === 'eur' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400')}>
+                        €
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <Input type="number" placeholder="0"
+                      min="0" max={form.discountMode === 'pct' ? '100' : undefined} step={form.discountMode === 'eur' ? '0.01' : '1'}
+                      value={form.discount} onChange={e => setForm({...form, discount: e.target.value})}
+                      className="pr-8"/>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-bold">
+                      {form.discountMode === 'pct' ? '%' : '€'}
+                    </span>
                   </div>
                 </div>
-              )}
+              </div>
+              {form.price && Number(form.price) > 0 && (() => {
+                // Calcul du prix final selon le mode de remise
+                const priceNum = Number(form.price) || 0
+                const discNum  = Number(form.discount) || 0
+                const finalP = form.discountMode === 'eur'
+                  ? Math.max(0, priceNum - discNum)
+                  : priceNum * (1 - discNum / 100)
+                const hasDisc = discNum > 0
+                const eqPct   = form.discountMode === 'eur' && priceNum > 0 ? (discNum / priceNum) * 100 : discNum
+                return (
+                  <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <span className="text-sm text-gray-500">Prix affiché en caisse</span>
+                      {hasDisc && form.discountMode === 'eur' && (
+                        <p className="text-xs text-gray-400">soit -{eqPct.toFixed(1)}%</p>
+                      )}
+                      {hasDisc && form.discountMode === 'pct' && (
+                        <p className="text-xs text-gray-400">soit -{(priceNum - finalP).toFixed(2)} €</p>
+                      )}
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      {hasDisc && <span className="text-sm text-gray-400 line-through">{priceNum.toFixed(2)} €</span>}
+                      <span className="text-lg font-black text-gray-900">{finalP.toFixed(2)} €</span>
+                    </div>
+                  </div>
+                )
+              })()}
               {/* Stock */}
               <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2">
