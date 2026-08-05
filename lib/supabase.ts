@@ -1906,6 +1906,54 @@ export async function decrementVariantStock(variantId: string, qty: number) {
 }
 
 
+// ─── Affichage marques dans le planning ───────────────────────
+
+// Marques à afficher dans le planning (actives + show_in_planning)
+export async function getPlanningBrands(includeHidden = false) {
+  let q = supabase.from('brands').select('*').eq('is_active', true).order('name')
+  if (!includeHidden) q = q.neq('show_in_planning', false)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function setBrandShowInPlanning(brandId: string, show: boolean) {
+  const { error } = await supabase
+    .from('brands')
+    .update({ show_in_planning: show })
+    .eq('id', brandId)
+  if (error) throw error
+}
+
+
+// ─── Vacances marques (planning) ──────────────────────────────
+
+export async function getPlanningVacations(weekKey: string) {
+  const { data, error } = await supabase
+    .from('planning_vacations')
+    .select('creator_id')
+    .eq('week_key', weekKey)
+  if (error) throw error
+  return (data || []).map((v: any) => v.creator_id as string)
+}
+
+export async function setPlanningVacation(creatorId: string, weekKey: string, onVacation: boolean, createdBy?: string) {
+  if (onVacation) {
+    const { error } = await supabase
+      .from('planning_vacations')
+      .upsert([{ creator_id: creatorId, week_key: weekKey, created_by: createdBy ?? null }], { onConflict: 'creator_id,week_key' })
+    if (error) throw error
+  } else {
+    const { error } = await supabase
+      .from('planning_vacations')
+      .delete()
+      .eq('creator_id', creatorId)
+      .eq('week_key', weekKey)
+    if (error) throw error
+  }
+}
+
+
 // ─── Locations ────────────────────────────────────────────────
 
 export async function getRentals(filters?: { status?: string; brand_id?: string; product_id?: string }) {

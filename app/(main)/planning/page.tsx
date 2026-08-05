@@ -3,8 +3,9 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Download, Grid, BarChart2, AlertTriangle, Check, Clock, Save } from 'lucide-react'
-import { getBrands, getPlanningWeek, savePlanningSlot, getPlanningWeekKeys } from '@/lib/supabase'
+import { ChevronLeft, ChevronRight, Download, Grid, BarChart2, AlertTriangle, Check, Clock, Save, Plane, Palmtree, Eye, EyeOff, Settings2 } from 'lucide-react'
+import { getPlanningBrands, getPlanningWeek, savePlanningSlot, getPlanningWeekKeys, getPlanningVacations, setPlanningVacation, setBrandShowInPlanning } from '@/lib/supabase'
+import { useAuthStore } from '@/hooks/useAuth'
 import { Button, Card, CardHeader, CardTitle, Spinner, cn } from '@/components/ui'
 
 const DAYS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi']
@@ -21,7 +22,7 @@ const SLOTS = [
 type SlotId = 'morning'|'afternoon'|'full'|'custom'|'off'
 type CreatorSlot = { slotId: SlotId; customStart?: number; customEnd?: number }
 type PlanningData = Record<string, Record<number, Record<string, CreatorSlot>>>
-type Creator = { id: string; name: string }
+type Creator = { id: string; name: string; show_in_planning?: boolean }
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -185,6 +186,11 @@ function SlotPicker({ value, onChange, saving }: {
 // ─── MAIN PAGE ────────────────────────────────────────────────
 export default function PlanningPage() {
   const [creators, setCreators]       = useState<Creator[]>([])
+  const [vacations, setVacations]     = useState<string[]>([])  // creator_ids en vacances cette semaine
+  const [allBrands, setAllBrands]     = useState<Creator[]>([])  // toutes les marques (pour gérer l'affichage)
+  const [showSettings, setShowSettings] = useState(false)
+  const { seller }                    = useAuthStore()
+  const isManager                     = seller?.role === 'manager'
   const [weekKey, setWeekKey]         = useState(getWeekKey(new Date()))
   const [planning, setPlanning]       = useState<PlanningData>({})
   const [loading, setLoading]         = useState(true)
@@ -200,7 +206,11 @@ export default function PlanningPage() {
   const loadWeek = useCallback(async (wk: string) => {
     setWeekLoading(true)
     try {
-      const rows = await getPlanningWeek(wk)
+      const [rows, vacs] = await Promise.all([
+        getPlanningWeek(wk),
+        getPlanningVacations(wk).catch(() => []),
+      ])
+      setVacations(vacs as string[])
       setPlanning(prev => {
         // Construire le planning de la semaine depuis Supabase
         const weekData: Record<number, Record<string, CreatorSlot>> = {}
@@ -222,6 +232,41 @@ export default function PlanningPage() {
     }
   }, [])
 
+  // Toggle vacances d'une marque (managers uniquement)
+  const toggleVacation = useCallback(async (creatorId: string) => {
+    if (!isManager) return
+    const onVac = !vacations.includes(creatorId)
+    // Optimistic update
+    setVacations(prev => onVac ? [...prev, creatorId] : prev.filter(id => id !== creatorId))
+    try {
+      await setPlanningVacation(creatorId, weekKey, onVac, seller?.name)
+    } catch {
+      // rollback
+      setVacations(prev => onVac ? prev.filter(id => id !== creatorId) : [...prev, creatorId])
+    }
+  }, [isManager, vacations, weekKey, seller?.name]) // eslint-disable-line
+
+  // Afficher / masquer une marque dans le planning (managers uniquement, persistant)
+  const toggleBrandVisibility = useCallback(async (brandId: string) => {
+    if (!isManager) return
+    const brand = allBrands.find(b => b.id === brandId)
+    if (!brand) return
+    const newShow = brand.show_in_planning === false  // on inverse
+    // Optimistic
+    setAllBrands(prev => prev.map(b => b.id === brandId ? { ...b, show_in_planning: newShow } : b))
+    setCreators(prev => {
+      const updated = allBrands.map(b => b.id === brandId ? { ...b, show_in_planning: newShow } : b)
+      return updated.filter(b => b.show_in_planning !== false)
+    })
+    try {
+      await setBrandShowInPlanning(brandId, newShow)
+    } catch {
+      // rollback
+      setAllBrands(prev => prev.map(b => b.id === brandId ? { ...b, show_in_planning: !newShow } : b))
+      setCreators(allBrands.filter(b => b.show_in_planning !== false))
+    }
+  }, [isManager, allBrands]) // eslint-disable-line
+
   // Load week history keys
   const loadHistory = useCallback(async () => {
     try {
@@ -232,8 +277,13 @@ export default function PlanningPage() {
 
   useEffect(() => {
     // Charger créateurs + historique — Supabase est source de vérité
-    getBrands()
-      .then(d => { setCreators((d || []) as Creator[]); setLoading(false) })
+    getPlanningBrands(true)  // inclure les masquées pour la gestion
+      .then(d => {
+        const all = (d || []) as Creator[]
+        setAllBrands(all)
+        setCreators(all.filter(b => b.show_in_planning !== false))
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
     loadHistory()
   }, [loadHistory])
@@ -273,10 +323,12 @@ export default function PlanningPage() {
   }, [weekKey, loadHistory])
 
   const dayAnalysis = useMemo(() => DAYS.map((_, di) => {
-    const ds = planning[weekKey]?.[di] ?? {}
+    const raw = planning[weekKey]?.[di] ?? {}
+    // Exclure les marques en vacances du calcul de couverture
+    const ds = Object.fromEntries(Object.entries(raw).filter(([cId]) => !vacations.includes(cId)))
     const gaps = getGaps(ds)
     return { daySlots: ds, gaps, covered: gaps.length === 0 }
-  }), [planning, weekKey])
+  }), [planning, weekKey, vacations])
 
   const coveredCount  = dayAnalysis.filter(d => d.covered).length
   const totalGapHours = dayAnalysis.reduce((s, d) => s + d.gaps.reduce((g, gap) => g + (gap.end - gap.start), 0), 0)
@@ -352,9 +404,47 @@ export default function PlanningPage() {
               <Clock size={14}/> Historique
               {weekKeys.length > 0 && <span className="text-xs bg-gray-200 px-1.5 py-0.5 rounded-full font-bold">{weekKeys.length}</span>}
             </Button>
+            {isManager && (
+              <Button variant="outline" size="sm" onClick={() => setShowSettings(!showSettings)} className={cn('gap-1.5', showSettings && 'bg-gray-100')}>
+                <Settings2 size={14}/> Marques
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={exportTxt}><Download size={14}/></Button>
           </div>
         </div>
+
+        {/* Settings panel — gérer l'affichage des marques (managers) */}
+        {showSettings && isManager && (
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-gray-900">Marques dans le planning</p>
+                <p className="text-xs text-gray-400">Choisissez les marques à afficher dans la grille</p>
+              </div>
+              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {allBrands.map((b, i) => {
+                const visible = b.show_in_planning !== false
+                return (
+                  <button key={b.id} onClick={() => toggleBrandVisibility(b.id)}
+                    className={cn('flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 transition-all text-left',
+                      visible ? 'border-gray-200 bg-white hover:border-gray-300' : 'border-gray-100 bg-gray-50 opacity-60')}>
+                    <div className={cn('w-6 h-6 rounded-lg flex items-center justify-center text-white text-[11px] font-black shrink-0', !visible && 'opacity-40')}
+                      style={{background:COLORS[i%COLORS.length]}}>{b.name[0]}</div>
+                    <span className={cn('text-sm font-semibold truncate flex-1', visible ? 'text-gray-800' : 'text-gray-400')}>{b.name}</span>
+                    {visible
+                      ? <Eye size={15} className="text-green-500 shrink-0"/>
+                      : <EyeOff size={15} className="text-gray-300 shrink-0"/>}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-gray-400 pt-1 border-t border-gray-100">
+              {allBrands.filter(b => b.show_in_planning !== false).length} marque(s) affichée(s) sur {allBrands.length}
+            </p>
+          </div>
+        )}
 
         {/* History panel */}
         {showHistory && weekKeys.length > 0 && (
@@ -391,7 +481,7 @@ export default function PlanningPage() {
           {[
             { label:'Jours couverts', value:`${coveredCount}/6`, ok: coveredCount===6 },
             { label:'Heures manquantes', value:`${totalGapHours}h`, ok: totalGapHours===0 },
-            { label:'Créateurs', value: creators.length, ok: true },
+            { label:'Créateurs actifs', value: `${creators.length - vacations.length}/${creators.length}`, ok: true },
             { label:'Heures totales possibles', value:'60h', ok: true },
           ].map(k => (
             <div key={k.label} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
@@ -416,14 +506,29 @@ export default function PlanningPage() {
                     <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wide border-r border-gray-100" style={{minWidth:'130px'}}>
                       Jour
                     </th>
-                    {creators.map((c, i) => (
-                      <th key={c.id} className="px-3 py-3.5 border-r border-gray-100 last:border-r-0 bg-gray-50" style={{minWidth:'145px'}}>
+                    {creators.map((c, i) => {
+                      const onVac = vacations.includes(c.id)
+                      return (
+                      <th key={c.id} className={cn('px-3 py-3.5 border-r border-gray-100 last:border-r-0', onVac ? 'bg-orange-50' : 'bg-gray-50')} style={{minWidth:'145px'}}>
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[11px] font-black shrink-0" style={{background:COLORS[i%COLORS.length]}}>{c.name[0]}</div>
-                          <span className="text-xs font-bold text-gray-700 truncate">{c.name}</span>
+                          <div className={cn('w-6 h-6 rounded-lg flex items-center justify-center text-white text-[11px] font-black shrink-0', onVac && 'opacity-40')} style={{background:COLORS[i%COLORS.length]}}>{c.name[0]}</div>
+                          <span className={cn('text-xs font-bold truncate', onVac ? 'text-orange-400 line-through' : 'text-gray-700')}>{c.name}</span>
+                          {isManager && (
+                            <button onClick={() => toggleVacation(c.id)}
+                              title={onVac ? 'Réactiver cette marque' : 'Mettre en vacances'}
+                              className={cn('ml-auto w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0',
+                                onVac ? 'bg-orange-400 text-white hover:bg-orange-500' : 'text-gray-300 hover:text-orange-500 hover:bg-orange-50')}>
+                              <Palmtree size={13}/>
+                            </button>
+                          )}
                         </div>
+                        {onVac && (
+                          <p className="text-[10px] font-bold text-orange-500 mt-1 flex items-center gap-1">
+                            🏖 En vacances
+                          </p>
+                        )}
                       </th>
-                    ))}
+                    )})}
                     <th className="px-3 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wide bg-gray-50" style={{minWidth:'150px'}}>Couverture</th>
                   </tr>
                 </thead>
@@ -445,11 +550,19 @@ export default function PlanningPage() {
                             </div>
                           </div>
                         </td>
-                        {creators.map(c => (
-                          <td key={c.id} className="px-2 py-2 border-r border-gray-100 last:border-r-0">
-                            <SlotPicker value={getSlot(di, c.id)} onChange={slot => setSlot(di, c.id, slot)} saving={saving}/>
+                        {creators.map(c => {
+                          const onVac = vacations.includes(c.id)
+                          return (
+                          <td key={c.id} className={cn('px-2 py-2 border-r border-gray-100 last:border-r-0', onVac && 'bg-orange-50/40')}>
+                            {onVac ? (
+                              <div className="flex items-center justify-center gap-1 py-2 text-[11px] font-semibold text-orange-400 bg-orange-50 rounded-lg border border-orange-100">
+                                🏖 Vacances
+                              </div>
+                            ) : (
+                              <SlotPicker value={getSlot(di, c.id)} onChange={slot => setSlot(di, c.id, slot)} saving={saving}/>
+                            )}
                           </td>
-                        ))}
+                        )})}
                         <td className="px-3 py-2">
                           <div className="space-y-1.5">
                             <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
