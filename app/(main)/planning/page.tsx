@@ -17,9 +17,10 @@ const SLOTS = [
   { id:'afternoon', label:'15h – 20h', start:15, end:20, color:'#10B981', bg:'#ECFDF5' },
   { id:'full',      label:'10h – 20h', start:10, end:20, color:'#6366F1', bg:'#EEF2FF' },
   { id:'custom',    label:'Horaire personnalisé', start:0, end:0, color:'#F59E0B', bg:'#FFFBEB' },
+  { id:'leave',     label:'Congés',   start:0,  end:0,  color:'#EC4899', bg:'#FDF2F8' },
   { id:'off',       label:'Absent',   start:0,  end:0,  color:'#9CA3AF', bg:'#F9FAFB' },
 ]
-type SlotId = 'morning'|'afternoon'|'full'|'custom'|'off'
+type SlotId = 'morning'|'afternoon'|'full'|'custom'|'leave'|'off'
 type CreatorSlot = { slotId: SlotId; customStart?: number; customEnd?: number }
 type PlanningData = Record<string, Record<number, Record<string, CreatorSlot>>>
 type Creator = { id: string; name: string; show_in_planning?: boolean }
@@ -67,7 +68,7 @@ function fmtWeekShort(k: string): string {
 }
 
 function getCov(slot: CreatorSlot): {start:number;end:number} | null {
-  if (slot.slotId === 'off') return null
+  if (slot.slotId === 'off' || slot.slotId === 'leave') return null
   if (slot.slotId === 'custom') {
     return slot.customStart != null && slot.customEnd != null && slot.customEnd > slot.customStart
       ? { start: slot.customStart, end: slot.customEnd } : null
@@ -109,7 +110,7 @@ function SlotPicker({ value, onChange, saving }: {
   }, [open])
 
   const cur = value ?? { slotId: 'off' as SlotId }
-  const def = SLOTS.find(t => t.id === cur.slotId) ?? SLOTS[4]
+  const def = SLOTS.find(t => t.id === cur.slotId) ?? SLOTS[SLOTS.length - 1]
   const label = cur.slotId === 'custom' && cur.customStart != null
     ? `${cur.customStart}h – ${cur.customEnd}h`
     : def.label
@@ -340,7 +341,8 @@ export default function PlanningPage() {
       const ds = planning[weekKey]?.[i] ?? {}
       creators.forEach(c => {
         const s = ds[c.id]; const cov = s ? getCov(s) : null
-        txt += `  ${c.name}: ${cov ? `${cov.start}h–${cov.end}h` : 'Absent'}\n`
+        const label = cov ? `${cov.start}h–${cov.end}h` : (s?.slotId === 'leave' ? 'Congés' : 'Absent')
+        txt += `  ${c.name}: ${label}\n`
       })
       const gaps = getGaps(ds)
       if (gaps.length > 0) txt += `  ⚠ Vide: ${gaps.map(g => `${g.start}h-${g.end}h`).join(', ')}\n`
