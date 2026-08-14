@@ -17,7 +17,7 @@ const SLOTS = [
   { id:'afternoon', label:'15h – 20h', start:15, end:20, color:'#10B981', bg:'#ECFDF5' },
   { id:'full',      label:'10h – 20h', start:10, end:20, color:'#6366F1', bg:'#EEF2FF' },
   { id:'custom',    label:'Horaire personnalisé', start:0, end:0, color:'#F59E0B', bg:'#FFFBEB' },
-  { id:'leave',     label:'Congés',   start:0,  end:0,  color:'#EC4899', bg:'#FDF2F8' },
+  { id:'leave',     label:'Vacances', start:0,  end:0,  color:'#EC4899', bg:'#FDF2F8' },
   { id:'off',       label:'Absent',   start:0,  end:0,  color:'#9CA3AF', bg:'#F9FAFB' },
 ]
 type SlotId = 'morning'|'afternoon'|'full'|'custom'|'leave'|'off'
@@ -296,13 +296,14 @@ export default function PlanningPage() {
   const getSlot = (di: number, cId: string) => planning[weekKey]?.[di]?.[cId]
 
   const setSlot = useCallback(async (di: number, cId: string, slot: CreatorSlot) => {
+    // Sauvegarde du slot précédent pour rollback éventuel
+    const prevSlot = planning[weekKey]?.[di]?.[cId]
     // Optimistic update
     setPlanning(prev => {
       const next = structuredClone(prev)
       if (!next[weekKey]) next[weekKey] = {}
       if (!next[weekKey][di]) next[weekKey][di] = {}
       next[weekKey][di][cId] = slot
-      // Persist to Supabase — source de vérité (plus de localStorage)
       return next
     })
     // Save to Supabase
@@ -317,11 +318,22 @@ export default function PlanningPage() {
         custom_end:   slot.customEnd ?? null,
       })
       setSavedAt(new Date())
-      // Refresh history keys
       loadHistory()
-    } catch (e) { console.error('[planning save]', e) }
+    } catch (e) {
+      console.error('[planning save]', e)
+      // Rollback en cas d'échec (ex: contrainte DB) pour refléter l'état réel
+      setPlanning(prev => {
+        const next = structuredClone(prev)
+        if (!next[weekKey]) next[weekKey] = {}
+        if (!next[weekKey][di]) next[weekKey][di] = {}
+        if (prevSlot) next[weekKey][di][cId] = prevSlot
+        else delete next[weekKey][di][cId]
+        return next
+      })
+      alert('Échec de l\'enregistrement. Vérifiez que la migration SQL a bien été exécutée.')
+    }
     finally { setSaving(false) }
-  }, [weekKey, loadHistory])
+  }, [weekKey, loadHistory, planning])
 
   const dayAnalysis = useMemo(() => DAYS.map((_, di) => {
     const raw = planning[weekKey]?.[di] ?? {}
@@ -341,7 +353,7 @@ export default function PlanningPage() {
       const ds = planning[weekKey]?.[i] ?? {}
       creators.forEach(c => {
         const s = ds[c.id]; const cov = s ? getCov(s) : null
-        const label = cov ? `${cov.start}h–${cov.end}h` : (s?.slotId === 'leave' ? 'Congés' : 'Absent')
+        const label = cov ? `${cov.start}h–${cov.end}h` : (s?.slotId === 'leave' ? 'Vacances' : 'Absent')
         txt += `  ${c.name}: ${label}\n`
       })
       const gaps = getGaps(ds)
