@@ -178,8 +178,8 @@ export default function CloturePage() {
   // Fond de caisse
   const [fundOpening, setFundOpening] = useState('')
   const [fundClosing, setFundClosing] = useState('')
-  const [cashCounts, setCashCounts]   = useState<Record<string, number>>({})  // compteur billets/pièces
-  const [useCounter, setUseCounter]   = useState(true)
+  // Compteurs par marque : { "romeda": { "50": 2, "20": 3 }, ... }
+  const [brandCounts, setBrandCounts] = useState<Record<string, Record<string, number>>>({})
   const [closedBy, setClosedBy]       = useState('')
   const [notes, setNotes]             = useState('')
   const [saving, setSaving]           = useState(false)
@@ -207,9 +207,18 @@ export default function CloturePage() {
         setFundOpening(ex.fund_opening != null ? String(ex.fund_opening) : '')
         setFundClosing(ex.fund_closing != null ? String(ex.fund_closing) : '')
         setClosedBy(ex.closed_by ?? '')
-        setNotes(ex.notes ?? '')
+        // Extraire les compteurs par marque du champ notes
+        const raw = ex.notes ?? ''
+        const marker = raw.indexOf('__CAISSES__')
+        if (marker >= 0) {
+          setNotes(raw.slice(0, marker).trim())
+          try { setBrandCounts(JSON.parse(raw.slice(marker + 11))) } catch { setBrandCounts({}) }
+        } else {
+          setNotes(raw)
+          setBrandCounts({})
+        }
       } else {
-        setFundOpening(''); setFundClosing(''); setClosedBy(''); setNotes(''); setCashCounts({})
+        setFundOpening(''); setFundClosing(''); setClosedBy(''); setNotes(''); setBrandCounts({})
       }
     } finally { setLoading(false) }
   }, [selectedDate])
@@ -264,17 +273,25 @@ export default function CloturePage() {
     }
   }, [sales, fundOpening, fundClosing])
 
-  // Total compté depuis le compteur de billets/pièces
-  const countedTotal = useMemo(() =>
-    DENOMINATIONS.reduce((s, d) => s + (cashCounts[String(d.value)] || 0) * d.value, 0),
-    [cashCounts])
+  // Total compté par marque + global depuis les compteurs
+  const countedByBrand = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const [brand, counts] of Object.entries(brandCounts)) {
+      map[brand] = DENOMINATIONS.reduce((s, d) => s + (counts[String(d.value)] || 0) * d.value, 0)
+    }
+    return map
+  }, [brandCounts])
 
-  // Synchroniser le compteur avec le champ "fond compté"
+  const countedTotal = useMemo(() =>
+    Object.values(countedByBrand).reduce((s, v) => s + v, 0),
+    [countedByBrand])
+
+  // Synchroniser le total compté avec le champ fond compté
   useEffect(() => {
-    if (useCounter && Object.keys(cashCounts).length > 0) {
+    if (Object.keys(brandCounts).length > 0) {
       setFundClosing(countedTotal.toFixed(2))
     }
-  }, [countedTotal, useCounter]) // eslint-disable-line
+  }, [countedTotal]) // eslint-disable-line
 
   // Clôturer
   const handleCloture = async () => {
@@ -294,7 +311,7 @@ export default function CloturePage() {
         fund_closing:  fundClosing ? Number(fundClosing) : null,
         fund_expected: fundOpening ? stats.fundExpected : null,
         fund_gap:      fundClosing ? stats.fundGap : null,
-        notes: notes || null,
+        notes: notes ? `${notes}\n\n__CAISSES__${JSON.stringify(brandCounts)}` : (Object.keys(brandCounts).length ? `__CAISSES__${JSON.stringify(brandCounts)}` : null),
       })
       setExisting(cl as Cloture)
       setSaved(true)
@@ -582,12 +599,12 @@ export default function CloturePage() {
               {/* ── RIGHT COL — Fond de caisse + Clôture ── */}
               <div className="space-y-6">
 
-                {/* Fond de caisse */}
+                {/* Fond de caisse — une caisse par marque */}
                 <Card>
-                  <CardHeader><CardTitle>Fond de caisse</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>Caisses par marque</CardTitle></CardHeader>
                   <CardContent className="pt-0 space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">Fond d'ouverture (€)</label>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">Fond d'ouverture commun (€)</label>
                       <div className="relative">
                         <input type="number" value={fundOpening} onChange={e => setFundOpening(e.target.value)}
                           placeholder="0.00" min="0" step="0.01" disabled={alreadyClosed}
@@ -596,68 +613,79 @@ export default function CloturePage() {
                       </div>
                     </div>
 
-                    {fundOpening && (
-                      <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1.5 text-sm">
-                        <div className="flex justify-between text-gray-600">
-                          <span>Fond ouverture</span><span>{fmt(Number(fundOpening))}</span>
-                        </div>
-                        <div className="flex justify-between text-green-700">
-                          <span>+ Espèces encaissées</span><span>+{fmt(stats.totalCash)}</span>
-                        </div>
-                        <Separator/>
-                        <div className="flex justify-between font-bold text-gray-900">
-                          <span>Attendu en caisse</span><span>{fmt(stats.fundExpected)}</span>
-                        </div>
+                    {/* Une caisse par marque ayant encaissé du cash */}
+                    {stats.byBrandCash.length === 0 ? (
+                      <div className="bg-gray-50 rounded-xl px-4 py-6 text-center">
+                        <Banknote size={24} className="text-gray-300 mx-auto mb-2"/>
+                        <p className="text-xs text-gray-400">Aucune vente en espèces à répartir</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {stats.byBrandCash.map(([brand, expectedCash], bi) => {
+                          const COLORS = ['#10b981','#0ea5e9','#6366f1','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
+                          const counts  = brandCounts[brand] || {}
+                          const counted = countedByBrand[brand] || 0
+                          const hasCount = Object.values(counts).some(n => n > 0)
+                          const gap = hasCount ? counted - expectedCash : null
+                          return (
+                            <details key={brand} className="border border-gray-200 rounded-xl overflow-hidden group" open={bi === 0}>
+                              <summary className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors list-none">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-black shrink-0"
+                                  style={{ background: COLORS[bi % COLORS.length] }}>{brand[0]}</div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-gray-900 truncate">{brand}</p>
+                                  <p className="text-xs text-gray-400">Attendu : {fmt(expectedCash)}</p>
+                                </div>
+                                {hasCount && (
+                                  <div className="text-right shrink-0">
+                                    <p className="text-sm font-black text-gray-900">{fmt(counted)}</p>
+                                    {gap !== null && (
+                                      <p className={cn('text-[11px] font-bold', gap === 0 ? 'text-green-600' : gap > 0 ? 'text-blue-600' : 'text-red-500')}>
+                                        {gap === 0 ? '✓ OK' : (gap > 0 ? '+' : '') + fmt(gap)}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                                <ChevronDown size={14} className="text-gray-400 shrink-0 group-open:rotate-180 transition-transform"/>
+                              </summary>
+                              <div className="border-t border-gray-100 p-3 bg-gray-50/50">
+                                <CashCounter
+                                  counts={counts}
+                                  disabled={alreadyClosed}
+                                  onChange={c => setBrandCounts(prev => ({ ...prev, [brand]: c }))}/>
+                                {/* Écart de cette caisse */}
+                                {hasCount && gap !== null && (
+                                  <div className={cn('mt-2 rounded-lg px-3 py-2 flex items-center justify-between text-xs font-semibold',
+                                    gap === 0 ? 'bg-green-50 text-green-700' : gap > 0 ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-600')}>
+                                    <span>Écart {brand}</span>
+                                    <span>{gap === 0 ? '✓ Caisse juste' : (gap > 0 ? 'Surplus +' : 'Manque ') + fmt(Math.abs(gap))}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          )
+                        })}
                       </div>
                     )}
 
-                    {/* Fond compté — via compteur ou saisie directe */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="block text-xs font-semibold text-gray-600">Fond compté (€)</label>
-                        <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
-                          <button type="button" onClick={() => setUseCounter(true)}
-                            className={cn('px-2 py-0.5 rounded-md text-[11px] font-bold transition-all',
-                              useCounter ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400')}>
-                            🧮 Compteur
-                          </button>
-                          <button type="button" onClick={() => setUseCounter(false)}
-                            className={cn('px-2 py-0.5 rounded-md text-[11px] font-bold transition-all',
-                              !useCounter ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400')}>
-                            ✏️ Direct
-                          </button>
+                    {/* Récapitulatif global */}
+                    {countedTotal > 0 && (
+                      <div className="bg-gray-900 text-white rounded-xl px-4 py-3 space-y-1.5">
+                        <div className="flex justify-between text-sm text-gray-300">
+                          <span>Total espèces attendu</span><span>{fmt(stats.totalCash)}</span>
                         </div>
-                      </div>
-
-                      {useCounter ? (
-                        <div className="border border-gray-200 rounded-xl p-3">
-                          <CashCounter counts={cashCounts} onChange={setCashCounts} disabled={alreadyClosed}/>
+                        <div className="flex justify-between text-sm text-gray-300">
+                          <span>Total compté (toutes caisses)</span><span>{fmt(countedTotal)}</span>
                         </div>
-                      ) : (
-                        <div className="relative">
-                          <input type="number" value={fundClosing} onChange={e => setFundClosing(e.target.value)}
-                            placeholder="0.00" min="0" step="0.01" disabled={alreadyClosed}
-                            className="w-full border border-gray-200 rounded-xl px-4 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60 disabled:bg-gray-50"/>
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">€</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Gap */}
-                    {fundClosing && fundOpening && (
-                      <div className={cn('rounded-xl border px-4 py-3', gapBg)}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {stats.fundGap === 0 ? <CheckCircle size={16} className="text-green-600"/> : <AlertTriangle size={16} className={stats.fundGap! > 0 ? 'text-blue-600' : 'text-red-600'}/>}
-                            <span className="text-sm font-semibold">Écart de caisse</span>
-                          </div>
-                          <span className={cn('text-lg font-black', gapColor)}>
-                            {stats.fundGap !== null ? (stats.fundGap > 0 ? '+' : '') + fmt(stats.fundGap) : '—'}
+                        <Separator className="opacity-20"/>
+                        <div className="flex justify-between font-black">
+                          <span>Écart global</span>
+                          <span className={cn(
+                            Math.abs(countedTotal - stats.totalCash) < 0.005 ? 'text-green-400' :
+                            countedTotal > stats.totalCash ? 'text-blue-300' : 'text-red-300')}>
+                            {countedTotal - stats.totalCash >= 0 ? '+' : ''}{fmt(countedTotal - stats.totalCash)}
                           </span>
                         </div>
-                        <p className="text-xs mt-1 opacity-70">
-                          {stats.fundGap === 0 ? '✓ Caisse parfaite !' : stats.fundGap! > 0 ? 'Surplus en caisse' : 'Manque en caisse'}
-                        </p>
                       </div>
                     )}
                   </CardContent>
