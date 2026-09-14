@@ -1371,7 +1371,7 @@ export async function getSalesByDate(date: string) {
 
   const { data, error } = await supabase
     .from('sales')
-    .select('*, customer:customers(name), seller:sellers(name), items:sale_items(quantity, unit_price, total_price, product:products(name, brand:brands(name)))')
+    .select('*, customer:customers(name), seller:sellers(name), items:sale_items(quantity, unit_price, total_price, product:products(name, brand:brands(id, name)))')
     .gte('created_at', dayStart)
     .lte('created_at', dayEnd)
     .order('created_at', { ascending: false })
@@ -1951,6 +1951,81 @@ export async function setPlanningVacation(creatorId: string, weekKey: string, on
       .eq('week_key', weekKey)
     if (error) throw error
   }
+}
+
+
+// ─── Caisses par marque ───────────────────────────────────────
+
+// Récupère les caisses d'une date
+export async function getBrandRegisters(date: string) {
+  const { data, error } = await supabase
+    .from('brand_registers')
+    .select('*')
+    .eq('date', date)
+  if (error) throw error
+  return data || []
+}
+
+// Récupère la dernière clôture d'une marque AVANT une date donnée
+// (pour proposer le fond d'ouverture = clôture de la veille, hors dimanche)
+export async function getLastBrandRegister(brandId: string, beforeDate: string) {
+  const { data, error } = await supabase
+    .from('brand_registers')
+    .select('*')
+    .eq('brand_id', brandId)
+    .eq('closed', true)
+    .lt('date', beforeDate)
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// Récupère la dernière clôture de TOUTES les marques avant une date (batch)
+export async function getLastBrandRegisters(beforeDate: string) {
+  const { data, error } = await supabase
+    .from('brand_registers')
+    .select('*')
+    .eq('closed', true)
+    .lt('date', beforeDate)
+    .order('date', { ascending: false })
+  if (error) throw error
+  // Garder la plus récente par marque
+  const map: Record<string, any> = {}
+  for (const r of (data || []) as any[]) {
+    if (!map[r.brand_id]) map[r.brand_id] = r
+  }
+  return map
+}
+
+// Enregistre / met à jour la caisse d'une marque
+export async function saveBrandRegister(data: {
+  date:          string
+  brand_id:      string
+  brand_name:    string
+  fund_opening:  number
+  counts:        Record<string, number>
+  fund_counted:  number
+  cash_sales:    number
+  fund_expected: number
+  fund_gap:      number | null
+  closed:        boolean
+  closed_by?:    string | null
+  note?:         string | null
+}) {
+  const row = {
+    ...data,
+    closed_at:  data.closed ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString(),
+  }
+  const { data: reg, error } = await supabase
+    .from('brand_registers')
+    .upsert([row], { onConflict: 'date,brand_id' })
+    .select()
+    .single()
+  if (error) throw error
+  return reg
 }
 
 
