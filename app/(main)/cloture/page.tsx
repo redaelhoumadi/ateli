@@ -11,7 +11,7 @@ import {
 import {
   getTodaySales, getSalesByDate, getSellers,
   getClotures, createCloture, getCloturByDate,
-  getBrandRegisters, getLastBrandRegisters, saveBrandRegister,
+  getBrandRegisters, getLastBrandRegisters, saveBrandRegister, getBrands,
 } from '@/lib/supabase'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
@@ -182,6 +182,7 @@ export default function CloturePage() {
   // Caisses par marque : { brandName: { opening: number, counts: {...} } }
   const [registers, setRegisters]     = useState<Record<string, { opening: string; counts: Record<string, number> }>>({})
   const [lastClosings, setLastClosings] = useState<Record<string, number>>({})  // clôture précédente par marque (nom → montant)
+  const [activeBrands, setActiveBrands]  = useState<{ id: string; name: string }[]>([])
   const [closedBy, setClosedBy]       = useState('')
   const [notes, setNotes]             = useState('')
   const [saving, setSaving]           = useState(false)
@@ -195,18 +196,20 @@ export default function CloturePage() {
     if (!selectedDate) return   // ne pas appeler si la date est vide
     setLoading(true); setSaved(false)
     try {
-      const [s, sel, cl, ex, regs, lastRegs] = await Promise.all([
+      const [s, sel, cl, ex, regs, lastRegs, brands] = await Promise.all([
         getSalesByDate(selectedDate),
         getSellers(),
         getClotures(60),
         getCloturByDate(selectedDate),
         getBrandRegisters(selectedDate).catch(() => []),
         getLastBrandRegisters(selectedDate).catch(() => ({})),
+        getBrands().catch(() => []),
       ])
       setSales((s as Sale[]) || [])
       setSellers((sel as Seller[]) || [])
       setClotures((cl as Cloture[]) || [])
       setExisting(ex as Cloture | null)
+      setActiveBrands(((brands as any[]) || []).map(b => ({ id: b.id, name: b.name })))
 
       // Clôtures précédentes par marque (nom → fond_counted)
       const lastMap: Record<string, number> = {}
@@ -289,19 +292,33 @@ export default function CloturePage() {
   // Helpers caisse par marque
   const brandIdByName = useMemo(() => {
     const map: Record<string, string> = {}
+    // D'abord depuis les marques actives
+    activeBrands.forEach(b => { map[b.name] = b.id })
+    // Puis compléter/écraser depuis les ventes (au cas où)
     sales.forEach(s => (s.items || []).forEach((i: any) => {
       const b = i.product?.brand
       if (b?.name && b?.id) map[b.name] = b.id
     }))
     return map
-  }, [sales])
+  }, [sales, activeBrands])
+
+  // Liste des caisses à afficher : TOUTES les marques actives + celles ayant vendu
+  // Chaque entrée = [nom, espèces encaissées ce jour (0 si aucune)]
+  const registerBrands = useMemo<[string, number][]>(() => {
+    const cashMap = new Map<string, number>(stats?.byBrandCash ?? [])
+    const names = new Set<string>([
+      ...activeBrands.map(b => b.name),
+      ...(stats?.byBrandCash.map(([b]) => b) ?? []),
+    ])
+    return Array.from(names)
+      .map(name => [name, cashMap.get(name) ?? 0] as [string, number])
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  }, [activeBrands, stats])
 
   const getReg = (brand: string) => registers[brand] || { opening: '', counts: {} }
   const brandCounted = (brand: string) =>
     DENOMINATIONS.reduce((s, d) => s + ((registers[brand]?.counts[String(d.value)] || 0) * d.value), 0)
   const brandOpening = (brand: string) => Number(registers[brand]?.opening) || 0
-  // Espèces attendues = fond ouverture + espèces encaissées de la marque
-  const brandExpected = (brand: string, cashSales: number) => brandOpening(brand) + cashSales
 
   const setBrandOpening = (brand: string, val: string) =>
     setRegisters(prev => ({ ...prev, [brand]: { opening: val, counts: prev[brand]?.counts || {} } }))
@@ -310,8 +327,8 @@ export default function CloturePage() {
 
   // Total compté toutes caisses
   const countedTotal = useMemo(() =>
-    stats ? stats.byBrandCash.reduce((s, [b]) => s + brandCounted(b), 0) : 0,
-    [registers, stats]) // eslint-disable-line
+    registerBrands.reduce((s, [b]) => s + brandCounted(b), 0),
+    [registers, registerBrands]) // eslint-disable-line
 
   // Sync fond compté global
   useEffect(() => {
@@ -323,8 +340,8 @@ export default function CloturePage() {
     setSaving(true)
     try {
       // 1. Sauvegarder la caisse de chaque marque
-      const totalOpening = stats.byBrandCash.reduce((s, [b]) => s + brandOpening(b), 0)
-      await Promise.all(stats.byBrandCash.map(([brand, cashSales]) => {
+      const totalOpening = registerBrands.reduce((s, [b]) => s + brandOpening(b), 0)
+      await Promise.all(registerBrands.map(([brand, cashSales]) => {
         const opening  = brandOpening(brand)
         const counted  = brandCounted(brand)
         const expected = opening + cashSales
@@ -657,14 +674,14 @@ export default function CloturePage() {
                       Le matin : saisir le fond d'ouverture (= clôture de la veille). Le soir : compter billets &amp; pièces.
                     </p>
 
-                    {stats.byBrandCash.length === 0 ? (
+                    {registerBrands.length === 0 ? (
                       <div className="bg-gray-50 rounded-xl px-4 py-6 text-center">
                         <Banknote size={24} className="text-gray-300 mx-auto mb-2"/>
-                        <p className="text-xs text-gray-400">Aucune vente en espèces à répartir</p>
+                        <p className="text-xs text-gray-400">Aucune marque active</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {stats.byBrandCash.map(([brand, cashSales], bi) => {
+                        {registerBrands.map(([brand, cashSales], bi) => {
                           const COLORS = ['#10b981','#0ea5e9','#6366f1','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
                           const reg      = getReg(brand)
                           const counted  = brandCounted(brand)
@@ -680,7 +697,10 @@ export default function CloturePage() {
                                   style={{ background: COLORS[bi % COLORS.length] }}>{brand[0]}</div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-bold text-gray-900 truncate">{brand}</p>
-                                  <p className="text-xs text-gray-400">Attendu : {fmt(expected)} <span className="text-gray-300">({fmt(opening)} + {fmt(cashSales)})</span></p>
+                                  <p className="text-xs text-gray-400">
+                                    Attendu : {fmt(expected)} <span className="text-gray-300">({fmt(opening)} + {fmt(cashSales)})</span>
+                                    {cashSales === 0 && <span className="ml-1 text-[10px] text-gray-300 bg-gray-100 px-1.5 py-0.5 rounded-full">sans vente cash</span>}
+                                  </p>
                                 </div>
                                 {hasCount && (
                                   <div className="text-right shrink-0">
@@ -755,16 +775,35 @@ export default function CloturePage() {
                     )}
 
                     {/* Récapitulatif global */}
-                    {countedTotal > 0 && (
-                      <div className="bg-gray-900 text-white rounded-xl px-4 py-3 space-y-1.5">
-                        <div className="flex justify-between text-sm text-gray-300">
-                          <span>Total espèces attendu</span><span>{fmt(stats.totalCash)}</span>
+                    {countedTotal > 0 && (() => {
+                      const totalOpen = registerBrands.reduce((s, [b]) => s + brandOpening(b), 0)
+                      const totalExpected = totalOpen + stats.totalCash
+                      const globalGap = countedTotal - totalExpected
+                      return (
+                        <div className="bg-gray-900 text-white rounded-xl px-4 py-3 space-y-1.5">
+                          <div className="flex justify-between text-sm text-gray-300">
+                            <span>Fonds d'ouverture</span><span>{fmt(totalOpen)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm text-gray-300">
+                            <span>+ Espèces encaissées</span><span>+{fmt(stats.totalCash)}</span>
+                          </div>
+                          <Separator className="opacity-20"/>
+                          <div className="flex justify-between text-sm text-gray-200 font-semibold">
+                            <span>Attendu (toutes caisses)</span><span>{fmt(totalExpected)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm text-gray-300">
+                            <span>Total compté</span><span>{fmt(countedTotal)}</span>
+                          </div>
+                          <Separator className="opacity-20"/>
+                          <div className="flex justify-between font-black">
+                            <span>Écart global</span>
+                            <span className={Math.abs(globalGap) < 0.005 ? 'text-green-400' : globalGap > 0 ? 'text-blue-300' : 'text-red-300'}>
+                              {globalGap >= 0 ? '+' : ''}{fmt(globalGap)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-sm text-gray-300">
-                          <span>Total compté (toutes caisses)</span><span>{fmt(countedTotal)}</span>
-                        </div>
-                      </div>
-                    )}
+                      )
+                    })()}
                   </CardContent>
                 </Card>
 
