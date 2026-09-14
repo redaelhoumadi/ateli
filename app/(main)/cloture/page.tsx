@@ -91,6 +91,81 @@ function SaleRow({ sale }: { sale: Sale }) {
   )
 }
 
+// ─── Dénominations euro ───────────────────────────────────────
+const DENOMINATIONS = [
+  { value: 500, label: '500 €', type: 'billet' },
+  { value: 200, label: '200 €', type: 'billet' },
+  { value: 100, label: '100 €', type: 'billet' },
+  { value: 50,  label: '50 €',  type: 'billet' },
+  { value: 20,  label: '20 €',  type: 'billet' },
+  { value: 10,  label: '10 €',  type: 'billet' },
+  { value: 5,   label: '5 €',   type: 'billet' },
+  { value: 2,   label: '2 €',   type: 'pièce' },
+  { value: 1,   label: '1 €',   type: 'pièce' },
+  { value: 0.5, label: '50 c',  type: 'pièce' },
+  { value: 0.2, label: '20 c',  type: 'pièce' },
+  { value: 0.1, label: '10 c',  type: 'pièce' },
+  { value: 0.05,label: '5 c',   type: 'pièce' },
+  { value: 0.02,label: '2 c',   type: 'pièce' },
+  { value: 0.01,label: '1 c',   type: 'pièce' },
+]
+
+// Compteur de billets & pièces → calcule le total automatiquement
+function CashCounter({ counts, onChange, disabled }: {
+  counts: Record<string, number>
+  onChange: (counts: Record<string, number>) => void
+  disabled?: boolean
+}) {
+  const total = DENOMINATIONS.reduce((s, d) => s + (counts[String(d.value)] || 0) * d.value, 0)
+
+  const setCount = (value: number, n: string) => {
+    const num = Math.max(0, parseInt(n) || 0)
+    onChange({ ...counts, [String(value)]: num })
+  }
+
+  const billets = DENOMINATIONS.filter(d => d.type === 'billet')
+  const pieces  = DENOMINATIONS.filter(d => d.type === 'pièce')
+
+  const renderRow = (d: typeof DENOMINATIONS[number]) => {
+    const n = counts[String(d.value)] || 0
+    const sub = n * d.value
+    return (
+      <div key={d.value} className="flex items-center gap-2">
+        <span className="text-xs font-bold text-gray-600 w-12 shrink-0">{d.label}</span>
+        <span className="text-gray-300 text-xs">×</span>
+        <input
+          type="number" min="0" inputMode="numeric"
+          value={n || ''} disabled={disabled}
+          onChange={e => setCount(d.value, e.target.value)}
+          placeholder="0"
+          className="w-14 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60 disabled:bg-gray-50"/>
+        <span className={cn('text-xs font-semibold ml-auto w-20 text-right', sub > 0 ? 'text-gray-900' : 'text-gray-300')}>
+          {sub > 0 ? fmt(sub) : '—'}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">💵 Billets</p>
+          {billets.map(renderRow)}
+        </div>
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">🪙 Pièces</p>
+          {pieces.map(renderRow)}
+        </div>
+      </div>
+      <div className="flex items-center justify-between bg-gray-900 text-white rounded-xl px-4 py-2.5">
+        <span className="text-sm font-semibold">Total compté</span>
+        <span className="text-lg font-black">{fmt(total)}</span>
+      </div>
+    </div>
+  )
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────
 export default function CloturePage() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
@@ -103,6 +178,8 @@ export default function CloturePage() {
   // Fond de caisse
   const [fundOpening, setFundOpening] = useState('')
   const [fundClosing, setFundClosing] = useState('')
+  const [cashCounts, setCashCounts]   = useState<Record<string, number>>({})  // compteur billets/pièces
+  const [useCounter, setUseCounter]   = useState(true)
   const [closedBy, setClosedBy]       = useState('')
   const [notes, setNotes]             = useState('')
   const [saving, setSaving]           = useState(false)
@@ -132,7 +209,7 @@ export default function CloturePage() {
         setClosedBy(ex.closed_by ?? '')
         setNotes(ex.notes ?? '')
       } else {
-        setFundOpening(''); setFundClosing(''); setClosedBy(''); setNotes('')
+        setFundOpening(''); setFundClosing(''); setClosedBy(''); setNotes(''); setCashCounts({})
       }
     } finally { setLoading(false) }
   }, [selectedDate])
@@ -158,12 +235,20 @@ export default function CloturePage() {
       bySeller.set(name, ex)
     })
 
-    // By brand
+    // By brand — total ET espèces séparément
     const byBrand = new Map<string, number>()
+    const byBrandCash = new Map<string, number>()
     sales.forEach(s => {
+      const isCash = s.payment_method === 'cash'
+      // Répartir le total de la vente sur ses articles par marque
+      const saleItemsTotal = (s.items || []).reduce((a, i) => a + i.total_price, 0) || 1
       ;(s.items || []).forEach(i => {
         const b = i.product?.brand?.name ?? 'Autre'
         byBrand.set(b, (byBrand.get(b) || 0) + i.total_price)
+        if (isCash) {
+          // Part de cette marque dans le paiement espèces
+          byBrandCash.set(b, (byBrandCash.get(b) || 0) + i.total_price)
+        }
       })
     })
 
@@ -174,9 +259,22 @@ export default function CloturePage() {
       totalCard, totalCash, totalMixed, total, itemsTotal, withCust, avgTicket,
       bySeller: Array.from(bySeller.values()).sort((a, b) => b.total - a.total),
       byBrand:  Array.from(byBrand.entries()).sort((a, b) => b[1] - a[1]),
+      byBrandCash: Array.from(byBrandCash.entries()).sort((a, b) => b[1] - a[1]),
       fundExpected, fundGap,
     }
   }, [sales, fundOpening, fundClosing])
+
+  // Total compté depuis le compteur de billets/pièces
+  const countedTotal = useMemo(() =>
+    DENOMINATIONS.reduce((s, d) => s + (cashCounts[String(d.value)] || 0) * d.value, 0),
+    [cashCounts])
+
+  // Synchroniser le compteur avec le champ "fond compté"
+  useEffect(() => {
+    if (useCounter && Object.keys(cashCounts).length > 0) {
+      setFundClosing(countedTotal.toFixed(2))
+    }
+  }, [countedTotal, useCounter]) // eslint-disable-line
 
   // Clôturer
   const handleCloture = async () => {
@@ -438,6 +536,38 @@ export default function CloturePage() {
                   </Card>
                 )}
 
+                {/* Espèces par marque */}
+                {stats.byBrandCash.length > 0 && (
+                  <Card>
+                    <CardHeader><CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center gap-2"><Banknote size={16} className="text-green-600"/> Espèces à répartir par marque</span>
+                      <span className="text-lg font-black text-green-700">{fmt(stats.totalCash)}</span>
+                    </CardTitle></CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-xs text-gray-400 mb-3">Montant en espèces à remettre à chaque marque</p>
+                      <div className="space-y-2">
+                        {stats.byBrandCash.map(([brand, cash], i) => {
+                          const COLORS = ['#10b981','#0ea5e9','#6366f1','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
+                          const pct = stats.totalCash > 0 ? (cash / stats.totalCash) * 100 : 0
+                          return (
+                            <div key={brand} className="flex items-center gap-3 bg-green-50/50 border border-green-100 rounded-xl px-3 py-2.5">
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-black shrink-0"
+                                style={{ background: COLORS[i % COLORS.length] }}>{brand[0]}</div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-800 truncate">{brand}</p>
+                                <div className="h-1.5 bg-white rounded-full overflow-hidden mt-1">
+                                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }}/>
+                                </div>
+                              </div>
+                              <p className="text-base font-black text-green-700 shrink-0">{fmt(cash)}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Sales list */}
                 {sales.length > 0 && (
                   <Card className="overflow-hidden">
@@ -481,14 +611,36 @@ export default function CloturePage() {
                       </div>
                     )}
 
+                    {/* Fond compté — via compteur ou saisie directe */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">Fond compté (€)</label>
-                      <div className="relative">
-                        <input type="number" value={fundClosing} onChange={e => setFundClosing(e.target.value)}
-                          placeholder="0.00" min="0" step="0.01" disabled={alreadyClosed}
-                          className="w-full border border-gray-200 rounded-xl px-4 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60 disabled:bg-gray-50"/>
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">€</span>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-gray-600">Fond compté (€)</label>
+                        <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                          <button type="button" onClick={() => setUseCounter(true)}
+                            className={cn('px-2 py-0.5 rounded-md text-[11px] font-bold transition-all',
+                              useCounter ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400')}>
+                            🧮 Compteur
+                          </button>
+                          <button type="button" onClick={() => setUseCounter(false)}
+                            className={cn('px-2 py-0.5 rounded-md text-[11px] font-bold transition-all',
+                              !useCounter ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400')}>
+                            ✏️ Direct
+                          </button>
+                        </div>
                       </div>
+
+                      {useCounter ? (
+                        <div className="border border-gray-200 rounded-xl p-3">
+                          <CashCounter counts={cashCounts} onChange={setCashCounts} disabled={alreadyClosed}/>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <input type="number" value={fundClosing} onChange={e => setFundClosing(e.target.value)}
+                            placeholder="0.00" min="0" step="0.01" disabled={alreadyClosed}
+                            className="w-full border border-gray-200 rounded-xl px-4 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60 disabled:bg-gray-50"/>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">€</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Gap */}
