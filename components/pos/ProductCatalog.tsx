@@ -11,6 +11,19 @@ import { getStockStatus } from '@/types'
 import type { Product, Brand, ProductVariant } from '@/types'
 import NextImage from 'next/image'
 
+// ─── Couleur déterministe par marque ──────────────────────────
+const BRAND_PALETTE = [
+  '#6366F1', '#EC4899', '#F59E0B', '#10B981', '#0EA5E9',
+  '#8B5CF6', '#EF4444', '#14B8A6', '#F97316', '#3B82F6',
+  '#D946EF', '#84CC16', '#06B6D4', '#A855F7', '#E11D48',
+]
+function brandColor(key: string | null | undefined): string {
+  if (!key) return '#9CA3AF'
+  let hash = 0
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) & 0xFFFFFFFF
+  return BRAND_PALETTE[Math.abs(hash) % BRAND_PALETTE.length]
+}
+
 export function ProductCatalog() {
   const [products, setProducts]       = useState<Product[]>([])
   const [brands, setBrands]           = useState<Brand[]>([])
@@ -75,20 +88,29 @@ export function ProductCatalog() {
 
       {/* Brand pills */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {[{ id: null, name: 'Tous' }, ...brands].map((b) => (
-          <button
-            key={b.id ?? 'all'}
-            onClick={() => setSelectedBrand(b.id)}
-            className={cn(
-              'shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900',
-              selectedBrand === b.id
-                ? 'bg-gray-900 text-white shadow-sm'
-                : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400 hover:text-gray-900'
-            )}
-          >
-            {b.name}
-          </button>
-        ))}
+        {[{ id: null, name: 'Tous' }, ...brands].map((b) => {
+          const color    = b.id ? brandColor(b.id) : null
+          const selected = selectedBrand === b.id
+          return (
+            <button
+              key={b.id ?? 'all'}
+              onClick={() => setSelectedBrand(b.id)}
+              className={cn(
+                'shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 border',
+                selected ? 'text-white shadow-sm border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:text-gray-900'
+              )}
+              style={selected
+                ? { background: b.id ? color! : '#111827', borderColor: b.id ? color! : '#111827' }
+                : b.id ? { borderColor: `${color}55` } : undefined}
+            >
+              {b.id && (
+                <span className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: selected ? '#ffffff' : color! }}/>
+              )}
+              {b.name}
+            </button>
+          )
+        })}
       </div>
 
       {/* Grid */}
@@ -107,6 +129,7 @@ export function ProductCatalog() {
             {products.map((p) => {
               const img  = optimizeImageUrl((p as any).image_url as string | null, 300)
               const price = finalPrice(p)
+              const bColor = brandColor(p.brand_id ?? (p.brand as any)?.id ?? p.brand?.name)
               return (
                 <button
                   key={p.id}
@@ -127,6 +150,9 @@ export function ProductCatalog() {
                       : "border-gray-100 hover:border-gray-300 hover:shadow-md active:scale-[0.98] cursor-pointer"
                   )}
                 >
+                  {/* Barre couleur marque */}
+                  <div className="h-1 w-full shrink-0" style={{ background: bColor }}/>
+
                   {/* Photo */}
                   <div className="w-full aspect-square bg-gray-50 overflow-hidden relative">
                     {img ? (
@@ -167,7 +193,10 @@ export function ProductCatalog() {
 
                   {/* Info */}
                   <div className="p-2 sm:p-3 flex-1 flex flex-col gap-0.5 sm:gap-1">
-                    <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide truncate">{p.brand?.name}</p>
+                    <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate flex items-center gap-1" style={{ color: bColor }}>
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }}/>
+                      {p.brand?.name}
+                    </p>
                     <p className="text-xs sm:text-sm font-semibold text-gray-900 line-clamp-2 leading-tight flex-1">{p.name}</p>
                     <p className="hidden sm:block text-xs text-gray-400">Réf: {p.reference}</p>
                     <div className="flex items-baseline gap-1.5 mt-1">

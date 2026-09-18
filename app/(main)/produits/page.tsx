@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { generateEAN13, renderEAN13SVG, validateEAN13 } from '@/lib/barcode'
 import NextImage from 'next/image'
+import { useAuthStore } from '@/hooks/useAuth'
 import { Search, Plus, Tag, Euro, Package, Archive, RotateCcw, Trash2, Pencil, ChevronUp, ChevronDown, Image as ImageIcon, AlertTriangle, Upload, Printer, RefreshCw } from 'lucide-react'
 import {
   getAllProducts, getBrands, createProduct, updateProduct,
@@ -26,11 +27,47 @@ import type { Product, Brand } from '@/types'
 
 type ProductForm = {
   name: string; reference: string; price: string
-  discount: string; discountMode: 'pct'|'eur'; brand_id: string; image_url: string | null
+  discount: string; discountMode: 'pct'|'eur'; purchase_price: string; margin: string; brand_id: string; image_url: string | null
   stock: string; stock_min: string; barcode: string
   is_rentable: boolean; rental_price_day: string; rental_deposit: string
 }
-const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', discountMode: 'pct', brand_id: '', image_url: null, stock: '', stock_min: '3', barcode: '', is_rentable: false, rental_price_day: '', rental_deposit: '' }
+const emptyForm: ProductForm = { name: '', reference: '', price: '', discount: '', discountMode: 'pct', purchase_price: '', margin: '30', brand_id: '', image_url: null, stock: '', stock_min: '3', barcode: '', is_rentable: false, rental_price_day: '', rental_deposit: '' }
+
+// ─── Paramètres de charges (micro-entreprise) ─────────────────
+// Charges proportionnelles au CA (prix de vente)
+const CHARGE_LOYER   = 0.22    // loyer 220€ / 1000€ CA moyen = 22%
+const CHARGE_URSSAF  = 0.123   // cotisations micro-entreprise 12.3%
+const CHARGE_IR      = 0.01    // impôt sur le revenu libératoire 1%
+const CHARGE_SUMUP   = 0.0175  // frais de paiement SumUp 1.75%
+const CHARGES_PCT    = CHARGE_LOYER + CHARGE_URSSAF + CHARGE_IR + CHARGE_SUMUP  // 37.05% du CA
+// Coûts fixes par article
+const TRANSPORT_UNIT = 1       // 1€ de transport en moyenne par article
+
+// Calcule le prix de vente conseillé à partir du prix d'achat
+// Formule : P = (prix_achat + transport) / (1 − charges% − marge%)
+function suggestedPrice(purchase: number, marginPct: number): {
+  price: number; breakEven: number; breakdown: { label: string; value: number }[]
+} | null {
+  const marge = Math.max(0, Math.min(0.9, marginPct / 100))
+  const denom = 1 - CHARGES_PCT - marge
+  if (denom <= 0) return null
+  const costUnit  = purchase + TRANSPORT_UNIT
+  const price     = costUnit / denom
+  const breakEven = costUnit / (1 - CHARGES_PCT)   // prix minimum sans marge
+  return {
+    price,
+    breakEven,
+    breakdown: [
+      { label: "Prix d'achat",        value: purchase },
+      { label: 'Transport (moyen)',   value: TRANSPORT_UNIT },
+      { label: `Loyer (${(CHARGE_LOYER*100).toFixed(0)}%)`,   value: price * CHARGE_LOYER },
+      { label: `URSSAF (${(CHARGE_URSSAF*100).toFixed(1)}%)`, value: price * CHARGE_URSSAF },
+      { label: `IR (${(CHARGE_IR*100).toFixed(0)}%)`,         value: price * CHARGE_IR },
+      { label: `SumUp (${(CHARGE_SUMUP*100).toFixed(2)}%)`,   value: price * CHARGE_SUMUP },
+      { label: `Marge (${(marge*100).toFixed(0)}%)`,          value: price * marge },
+    ],
+  }
+}
 
 // ─── Print barcode label ──────────────────────────────────────
 function printBarcode(code: string, productName: string, reference: string) {
@@ -68,6 +105,8 @@ function printBarcode(code: string, productName: string, reference: string) {
 
 export default function ProduitsPage() {
   const router = useRouter()
+  const { seller } = useAuthStore()
+  const isManager = seller?.role === 'manager'
   const [products, setProducts]     = useState<Product[]>([])
   const [brands, setBrands]         = useState<Brand[]>([])
   const [loading, setLoading]       = useState(true)
@@ -172,7 +211,7 @@ export default function ProduitsPage() {
 
   // CRUD
   const openAdd  = () => { setForm({ ...emptyForm, brand_id: brands[0]?.id || '' }); setVariants([]); setError(''); setModal('add') }
-  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', discountMode: 'pct', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '', is_rentable: (p as any).is_rentable ?? false, rental_price_day: (p as any).rental_price_day != null ? String((p as any).rental_price_day) : '', rental_deposit: (p as any).rental_deposit != null ? String((p as any).rental_deposit) : '' }); setError(''); setModal('edit'); getProductVariants(p.id).then(vs => setVariants((vs as any[]).map(v => ({ id: v.id, size: v.size, stock: String(v.stock), price: v.price != null ? String(v.price) : '' })))).catch(() => setVariants([])) }
+  const openEdit = (p: Product) => { setEditTarget(p); setForm({ name: p.name, reference: p.reference, price: String(p.price), discount: p.discount != null ? String(p.discount) : '', discountMode: 'pct', purchase_price: (p as any).purchase_price != null ? String((p as any).purchase_price) : '', margin: '30', brand_id: p.brand_id, image_url: (p as any).image_url ?? null, stock: p.stock != null ? String(p.stock) : '', stock_min: p.stock_min != null ? String(p.stock_min) : '3', barcode: (p as any).barcode ?? '', is_rentable: (p as any).is_rentable ?? false, rental_price_day: (p as any).rental_price_day != null ? String((p as any).rental_price_day) : '', rental_deposit: (p as any).rental_deposit != null ? String((p as any).rental_deposit) : '' }); setError(''); setModal('edit'); getProductVariants(p.id).then(vs => setVariants((vs as any[]).map(v => ({ id: v.id, size: v.size, stock: String(v.stock), price: v.price != null ? String(v.price) : '' })))).catch(() => setVariants([])) }
   const openDelete = (p: Product) => { setDeleteTarget(p); setDeleteMode(null); setError(''); setModal('delete') }
   const closeModal = () => { setModal(null); setEditTarget(null); setDeleteTarget(null); setError('') }
 
@@ -207,7 +246,7 @@ export default function ProduitsPage() {
       // Générer un EAN-13 si aucun barcode et que c'est une création
       const barcodeVal = form.barcode.trim()
         || (modal === 'add' ? generateEAN13(form.brand_id, form.reference.trim()) : '')
-      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url, stock: stockVal, stock_min: form.stock_min !== '' ? Number(form.stock_min) : 3, barcode: barcodeVal || null, is_rentable: form.is_rentable, rental_price_day: form.is_rentable && form.rental_price_day !== '' ? Number(form.rental_price_day) : null, rental_deposit: form.is_rentable && form.rental_deposit !== '' ? Number(form.rental_deposit) : null }
+      const payload = { name: form.name.trim(), reference: form.reference.trim().toUpperCase(), price: Number(form.price), discount: disc, brand_id: form.brand_id, image_url: form.image_url, stock: stockVal, stock_min: form.stock_min !== '' ? Number(form.stock_min) : 3, barcode: barcodeVal || null, purchase_price: form.purchase_price !== '' ? Number(form.purchase_price) : null, is_rentable: form.is_rentable, rental_price_day: form.is_rentable && form.rental_price_day !== '' ? Number(form.rental_price_day) : null, rental_deposit: form.is_rentable && form.rental_deposit !== '' ? Number(form.rental_deposit) : null }
       if (modal === 'add') {
         const created = await createProduct(payload)
         // Sauvegarder les variantes tailles
@@ -678,6 +717,68 @@ export default function ProduitsPage() {
                   <Button variant="outline" size="md" onClick={() => setModal('brand')}><Plus size={14}/> Marque</Button>
                 </div>
               </div>
+
+              {/* ── Prix d'achat & prix conseillé (gérant uniquement) ── */}
+              {isManager && (
+              <div className="rounded-xl border-2 border-emerald-100 bg-emerald-50/50 p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Prix d'achat (€)</Label>
+                    <Input type="number" placeholder="0.00" min="0" step="0.01"
+                      value={form.purchase_price}
+                      onChange={e => setForm({...form, purchase_price: e.target.value})}/>
+                  </div>
+                  <div>
+                    <Label>Marge souhaitée (%)</Label>
+                    <Input type="number" placeholder="30" min="0" max="80" step="1"
+                      value={form.margin}
+                      onChange={e => setForm({...form, margin: e.target.value})}/>
+                  </div>
+                </div>
+
+                {form.purchase_price !== '' && Number(form.purchase_price) >= 0 && (() => {
+                  const calc = suggestedPrice(Number(form.purchase_price) || 0, Number(form.margin) || 0)
+                  if (!calc) return <p className="text-xs text-red-500">Marge trop élevée — les charges dépassent 100 %</p>
+                  const currentPrice = Number(form.price) || 0
+                  const belowBreakEven = currentPrice > 0 && currentPrice < calc.breakEven
+                  return (
+                    <div className="space-y-2">
+                      {/* Détail du calcul */}
+                      <div className="bg-white border border-emerald-100 rounded-lg px-3 py-2.5 space-y-1">
+                        {calc.breakdown.map((b, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="text-gray-500">{b.label}</span>
+                            <span className="font-medium text-gray-700">{b.value.toFixed(2)} €</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-sm font-black text-emerald-700 pt-1.5 border-t border-emerald-100">
+                          <span>Prix de vente conseillé</span>
+                          <span>{calc.price.toFixed(2)} €</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] text-gray-400">
+                          <span>Seuil de rentabilité (0 % marge)</span>
+                          <span>{calc.breakEven.toFixed(2)} €</span>
+                        </div>
+                      </div>
+
+                      {/* Bouton appliquer */}
+                      <button type="button"
+                        onClick={() => setForm({...form, price: calc.price.toFixed(2)})}
+                        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all">
+                        Appliquer {calc.price.toFixed(2)} € comme prix de vente
+                      </button>
+
+                      {belowBreakEven && (
+                        <p className="text-xs text-red-600 font-semibold flex items-center gap-1.5">
+                          ⚠ Prix actuel ({currentPrice.toFixed(2)} €) sous le seuil de rentabilité — vous perdez de l'argent
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Prix (€) <span className="text-red-400">*</span></Label>
