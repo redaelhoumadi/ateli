@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import {
   findCustomerByContact,
   registerCustomer,
+  joinRaffleCustomer,
   getCustomerWithHistory,
   saveSession,
   loadSession,
@@ -215,6 +216,10 @@ export default function CustomerPortalPage() {
   const [busy, setBusy]   = useState(false)
   const [contact, setContact] = useState('')
   const [regForm, setRegForm] = useState({ name: '', email: '', phone: '' })
+  const [consent, setConsent]     = useState(false)
+  const [joinRaffle, setJoinRaffle] = useState(true)
+  const [raffleBusy, setRaffleBusy] = useState(false)
+  const [raffleJoined, setRaffleJoined] = useState(false)
 
   useEffect(() => {
     const id = loadSession()
@@ -241,9 +246,10 @@ export default function CustomerPortalPage() {
   const handleRegister = async () => {
     if (!regForm.name.trim()) return setError('Ton prénom est requis')
     if (!regForm.email.includes('@')) return setError('Email invalide')
+    if (!consent) return setError('Tu dois accepter les conditions pour créer ton compte')
     setBusy(true); setError('')
     try {
-      const customer = await registerCustomer(regForm)
+      const customer = await registerCustomer({ ...regForm, marketingConsent: consent, joinRaffle })
       const d = await getCustomerWithHistory(customer.id)
       saveSession(customer.id); setData(d); setView('dashboard')
     } catch (e: any) { setError(e.message) } finally { setBusy(false) }
@@ -251,6 +257,16 @@ export default function CustomerPortalPage() {
 
   const handleLogout = () => {
     clearSession(); setData(null); setContact(''); setView('welcome')
+  }
+
+  const handleJoinRaffle = async () => {
+    if (!data) return
+    setRaffleBusy(true)
+    try {
+      const tags = await joinRaffleCustomer(data.customer.id)
+      setData({ ...data, customer: { ...data.customer, tags } as any })
+      setRaffleJoined(true)
+    } catch { /* silencieux */ } finally { setRaffleBusy(false) }
   }
 
   // ── LOADING ──────────────────────────────────────────────────
@@ -387,12 +403,37 @@ export default function CustomerPortalPage() {
               ))}
             </div>
 
+            {/* Participation tombola */}
+            <button type="button" onClick={() => setJoinRaffle(v => !v)}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 text-left transition-all ${joinRaffle ? 'border-purple-300 bg-purple-50' : 'border-gray-200 bg-white'}`}>
+              <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border-2 transition-all ${joinRaffle ? 'bg-purple-600 border-purple-600' : 'border-gray-300'}`}>
+                {joinRaffle && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>}
+              </span>
+              <span className="text-sm">
+                <span className="font-bold text-gray-900">🎟️ Je participe à la tombola</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Tente de gagner nos lots du mois</span>
+              </span>
+            </button>
+
+            {/* Consentement conditions (obligatoire) */}
+            <button type="button" onClick={() => setConsent(v => !v)}
+              className={`w-full flex items-start gap-3 px-4 py-3.5 rounded-2xl border-2 text-left transition-all ${consent ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-white'}`}>
+              <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border-2 transition-all mt-0.5 ${consent ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}>
+                {consent && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>}
+              </span>
+              <span className="text-xs text-gray-600 leading-relaxed">
+                J'accepte que mes informations soient utilisées par <strong>Ateli</strong> à des fins commerciales
+                (offres, newsletter, tombola). Elles ne seront <strong>jamais partagées avec un tiers</strong>.
+                <span className="text-red-400"> *</span>
+              </span>
+            </button>
+
             {error && (
               <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
-            <button onClick={handleRegister} disabled={busy}
+            <button onClick={handleRegister} disabled={busy || !consent}
               className="w-full py-4 bg-black text-white font-bold rounded-2xl text-sm disabled:opacity-50 active:scale-95 transition-all">
               {busy ? 'Création du compte…' : '🎉 Créer mon compte'}
             </button>
@@ -422,6 +463,33 @@ export default function CustomerPortalPage() {
               <TierBadge tier={data.currentTier} />
             </div>
           </div>
+
+          {/* ── Grand bouton Tombola ── */}
+          {((data.customer as any).tags ?? []).includes('Tombola') || raffleJoined ? (
+            <div className="mx-5 mb-4 bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-2xl px-5 py-4 flex items-center gap-3">
+              <span className="text-2xl">🎉</span>
+              <div>
+                <p className="text-white font-black text-sm">Tu participes à la tombola !</p>
+                <p className="text-white/80 text-xs mt-0.5">Bonne chance pour le tirage du mois 🤞</p>
+              </div>
+            </div>
+          ) : (
+            <button onClick={handleJoinRaffle} disabled={raffleBusy}
+              className="mx-5 mb-4 bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-2xl px-5 py-4 flex items-center justify-between gap-3 active:scale-[0.98] transition-all disabled:opacity-60 shadow-lg shadow-purple-200">
+              <div className="flex items-center gap-3 text-left">
+                <span className="text-2xl">🎟️</span>
+                <div>
+                  <p className="text-white font-black text-sm">Participer à la tombola</p>
+                  <p className="text-white/80 text-xs mt-0.5">Tente de gagner nos lots du mois</p>
+                </div>
+              </div>
+              <span className="text-white shrink-0">
+                {raffleBusy
+                  ? <span className="block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                  : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>}
+              </span>
+            </button>
+          )}
 
           {/* ── Code client sticky card ── */}
           <div className="mx-5 mb-5 bg-gray-900 rounded-2xl px-5 py-4 flex items-center justify-between">

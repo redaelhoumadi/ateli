@@ -121,6 +121,8 @@ export async function registerCustomer(data: {
   name:              string
   email:             string
   phone:             string
+  marketingConsent?: boolean  // acceptation des conditions (usage commercial / newsletter)
+  joinRaffle?:       boolean  // participation à la tombola → tag "Tombola"
   sendWelcomeEmail?: boolean  // défaut true si email présent
 }) {
   // Check email uniqueness
@@ -132,9 +134,20 @@ export async function registerCustomer(data: {
 
   if (existing) throw new Error('Un compte existe déjà avec cet email.')
 
+  // Tags à l'inscription : "Tombola" si participation
+  const tags = data.joinRaffle ? ['Tombola'] : []
+
   const { data: customer, error } = await supabase
     .from('customers')
-    .insert([{ name: data.name.trim(), email: data.email.trim().toLowerCase(), phone: data.phone.trim(), points: 0 }])
+    .insert([{
+      name:  data.name.trim(),
+      email: data.email.trim().toLowerCase(),
+      phone: data.phone.trim(),
+      points: 0,
+      tags,
+      marketing_consent: data.marketingConsent === true,
+      marketing_consent_at: data.marketingConsent === true ? new Date().toISOString() : null,
+    }])
     .select()
     .single()
 
@@ -172,6 +185,24 @@ export async function registerCustomer(data: {
 
 // ─── Persist session in localStorage (client-side only) ────────
 export const SESSION_KEY = 'ateli_customer_id'
+
+// Ajoute le client à la tombola (tag "Tombola") depuis le portail
+export async function joinRaffleCustomer(customerId: string) {
+  const { data: c } = await supabase
+    .from('customers')
+    .select('tags')
+    .eq('id', customerId)
+    .single()
+  const current = ((c as any)?.tags ?? []) as string[]
+  if (current.includes('Tombola')) return current
+  const next = [...current, 'Tombola']
+  const { error } = await supabase
+    .from('customers')
+    .update({ tags: next })
+    .eq('id', customerId)
+  if (error) throw error
+  return next
+}
 
 export function saveSession(customerId: string) {
   if (typeof window !== 'undefined') localStorage.setItem(SESSION_KEY, customerId)

@@ -24,7 +24,7 @@ type C = {
   totalSpend: number; tier: typeof REWARDS_TIERS[number]; nextTier: typeof REWARDS_TIERS[number] | null
 }
 const TIER_ICONS: Record<string,string> = { bronze:'🥉', silver:'🥈', gold:'🥇', vip:'💜' }
-const TAGS = ['VIP','Pro','Créateur','Presse','Fidèle','Local','En ligne']
+const TAGS = ['VIP','Pro','Créateur','Presse','Fidèle','Local','En ligne','Tombola']
 const fmtE = (n: number) => n.toFixed(2) + ' €'
 
 // ─── Attach sale modal ────────────────────────────────────────
